@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- DayNight：跟随系统深色；Material3 父主题提供 materialButton*Style 等属性解析 -->
+    <style name="Theme.SolarRobotDemo" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/solar_primary</item>
+        <item name="colorPrimaryContainer">@color/solar_primary_dark</item>
+        <item name="colorSecondary">@color/solar_accent</item>
+        <item name="android:statusBarColor">@color/solar_primary_dark</item>
+        <item name="android:navigationBarColor">@color/solar_surface</item>
+        <item name="android:windowBackground">@color/solar_background</item>
+    </style>
+
+    <style name="Theme.SolarRobotDemo.Splash" parent="Theme.SolarRobotDemo">
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowBackground">@color/solar_primary</item>
+    </style>
+</resources>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">光伏机器人远程控制</string>
+    <string name="login_title">账号登录</string>
+    <string name="hint_username">用户名</string>
+    <string name="hint_password">密码</string>
+    <string name="remember_password">记住密码</string>
+    <string name="auto_login">自动登录</string>
+    <string name="login">登录</string>
+    <string name="main_title">光伏机器人控制台</string>
+    <string name="mqtt_status">MQTT</string>
+    <string name="device_status">设备</string>
+    <string name="battery">电量</string>
+    <string name="btn_forward">前进</string>
+    <string name="btn_backward">后退</string>
+    <string name="btn_left">左转</string>
+    <string name="btn_right">右转</string>
+    <string name="btn_stop">停止</string>
+    <string name="btn_emergency">急停</string>
+    <string name="view_logs">查看日志</string>
+    <string name="log_list_title">本地日志</string>
+    <string name="empty_logs">暂无日志</string>
+</resources>

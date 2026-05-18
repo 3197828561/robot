@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="solar_primary">#1B5E20</color>
+    <color name="solar_primary_dark">#0D3D10</color>
+    <color name="solar_accent">#FFD54F</color>
+    <color name="solar_background">#F5F9F6</color>
+    <color name="solar_surface">#FFFFFF</color>
+    <color name="solar_error">#B00020</color>
+    <color name="solar_on_primary">#FFFFFF</color>
+
+    <!-- 工业监控主界面：深色底 + 浅色卡片 -->
+    <color name="monitor_bg">#121418</color>
+    <color name="monitor_top_bar">#1A1F26</color>
+    <color name="monitor_card">#ECEFF4</color>
+    <color name="monitor_card_title">#1A1F26</color>
+    <color name="monitor_metric_value">#0D47A1</color>
+    <color name="monitor_label">#546E7A</color>
+    <color name="monitor_on_dark">#E8ECF1</color>
+    <color name="monitor_on_dark_muted">#8A95A3</color>
+    <!-- 若布局误写 @color/monitor_on_primary / motion_on_primary，可指向此处 -->
+    <color name="monitor_on_primary">@color/solar_on_primary</color>
+    <color name="motion_on_primary">@color/solar_on_primary</color>
+    <color name="monitor_accent_line">#00BCD4</color>
+
+    <!-- 官方遥控摇杆面板 -->
+    <color name="joystick_chassis_fill">#1B2838</color>
+    <color name="joystick_chassis_stroke">#3D5366</color>
+    <color name="joystick_direction_fill">#5C6B7A</color>
+    <color name="joystick_direction_pressed">#455A64</color>
+    <color name="joystick_stop_fill">#E64A19</color>
+    <color name="joystick_stop_stroke">#BF360C</color>
+</resources>
