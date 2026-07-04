@@ -137,6 +137,10 @@ class MqttManager private constructor(private val appContext: Context) {
                 connectionTimeout = 10
                 keepAliveInterval = 20
                 isAutomaticReconnect = false // 由应用层统一调度，便于写日志
+
+                mqttVersion = MqttConnectOptions.MQTT_VERSION_3_1_1
+                userName = MQTT_USERNAME
+                password = MQTT_PASSWORD.toCharArray()
             }
             mqttClient.setCallback(object : MqttCallbackExtended {
                 override fun connectComplete(reconnect: Boolean, serverURI: String?) {
@@ -238,7 +242,10 @@ class MqttManager private constructor(private val appContext: Context) {
     }
 
     companion object {
-        private const val SERVER_URI = "tcp://broker.hivemq.com:1883"
+        private const val SERVER_URI = "tcp://47.103.157.213:1883"
+        private const val MQTT_USERNAME = "app_user_001"
+        private const val MQTT_PASSWORD = "8zmJV8ZHDL/zZ4rLqYbWAYQ8ogsShiz8"
+
         private const val CLIENT_PREFIX = "solar_demo_"
         private const val DEVICE_ID = "solar_demo"
 
