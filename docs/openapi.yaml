@@ -1,0 +1,250 @@
+openapi: 3.0.3
+info:
+  title: VGSolar Robot HTTP API
+  version: 0.1.0
+  description: 光伏清洁机器人 App 联调最小 HTTP 契约（登录、设备、作业、固件、WiFi）
+
+servers:
+  - url: http://47.103.157.213/api
+    description: 当前阿里云 ECS（联调期 HTTP）
+
+paths:
+  /auth/login:
+    post:
+      summary: 用户登录
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '401':
+          description: 邮箱或密码错误
+
+  /devices:
+    get:
+      summary: 当前用户绑定的设备列表
+      tags: [Devices]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 设备列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+
+  /jobs:
+    get:
+      summary: 作业记录（按设备）
+      tags: [Jobs]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 作业记录列表
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/JobRecord'
+
+  /firmware/latest:
+    get:
+      summary: 查询最新固件
+      tags: [Firmware]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FirmwareMeta'
+
+  /firmware/upgrade:
+    post:
+      summary: 触发固件升级任务
+      tags: [Firmware]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FirmwareUpgradeRequest'
+      responses:
+        '200':
+          description: 任务已受理
+
+  /devices/{device_id}/wifi:
+    get:
+      summary: 读取 WiFi 配置
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WifiConfig'
+    put:
+      summary: 下发 WiFi 配置
+      tags: [WiFi]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WifiConfigUpdate'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WifiConfig'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        token_type:
+          type: string
+          example: bearer
+        expires_in:
+          type: integer
+
+    Device:
+      type: object
+      properties:
+        device_id:
+          type: string
+          example: rk3588
+        display_name:
+          type: string
+          example: Kwun-B22L-180926
+
+    JobRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        device_id:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+        cleaned_rows:
+          type: integer
+        note:
+          type: string
+          nullable: true
+
+    FirmwareMeta:
+      type: object
+      properties:
+        version:
+          type: string
+        download_url:
+          type: string
+        release_notes:
+          type: string
+          nullable: true
+        published_at:
+          type: string
+          format: date-time
+
+    FirmwareUpgradeRequest:
+      type: object
+      required: [device_id]
+      properties:
+        device_id:
+          type: string
+        target_version:
+          type: string
+          nullable: true
+
+    WifiConfig:
+      type: object
+      properties:
+        device_id:
+          type: string
+        ssid:
+          type: string
+          nullable: true
+        configured:
+          type: boolean
+
+    WifiConfigUpdate:
+      type: object
+      required: [ssid, password]
+      properties:
+        ssid:
+          type: string
+        password:
+          type: string

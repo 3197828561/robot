@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">光伏机器人远程控制</string>
+    <string name="hint_email">邮箱</string>
     <string name="login_title">账号登录</string>
     <string name="hint_username">用户名</string>
     <string name="hint_password">密码</string>

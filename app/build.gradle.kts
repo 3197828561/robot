@@ -4,19 +4,37 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
 }
 
+import java.util.Properties
+
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+
+fun prop(key: String, default: String): String =
+    localProperties.getProperty(key, default).replace("\"", "\\\"")
+
 android {
-    namespace = "com.robot.solar.demo"
-    // androidx.core / core-ktx 1.15.x 要求 compileSdk ≥ 35
+    namespace = "com.robot.solar"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.robot.solar.demo"
+        applicationId = "com.robot.solar"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "API_BASE_URL", "\"${prop("api.base.url", "http://10.0.2.2/api")}\"")
+        buildConfigField("String", "MQTT_HOST", "\"${prop("mqtt.host", "47.103.157.213")}\"")
+        buildConfigField("int", "MQTT_PORT", prop("mqtt.port", "1883"))
+        buildConfigField("String", "MQTT_USERNAME", "\"${prop("mqtt.username", "app_user_001")}\"")
+        buildConfigField("String", "MQTT_PASSWORD", "\"${prop("mqtt.password", "")}\"")
+        buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "rk3588")}\"")
     }
 
     buildTypes {
@@ -37,13 +55,13 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
-    // Material 3 组件与主题（MaterialButton、TextInputLayout、Widget.Material3.* / ?attr/materialButton*Style）
     implementation(libs.material)
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -54,6 +72,11 @@ dependencies {
     implementation(libs.androidx.swiperefreshlayout)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.paho.mqtt)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.okhttp)
+    implementation(libs.okhttp.logging)
+    implementation(libs.gson)
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
@@ -68,7 +91,6 @@ kapt {
     correctErrorTypes = true
 }
 
-// 与 Android Studio 中已安装的 jbr-21（Gradle JDK）对齐，避免国内网络下载 jbr-17 失败
 kotlin {
     jvmToolchain(21)
 }

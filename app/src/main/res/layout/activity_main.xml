@@ -171,9 +171,10 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tvTotalMileage"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="12,856 m"
+                        android:text="-- m"
                         android:textColor="@color/monitor_metric_value"
                         android:textSize="26sp"
                         android:textStyle="bold" />
@@ -232,9 +233,10 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tvTemperature"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="42 °C"
+                        android:text="-- °C"
                         android:textColor="@color/monitor_metric_value"
                         android:textSize="26sp"
                         android:textStyle="bold" />
@@ -256,9 +258,10 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tvPressure"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="101.3 kPa"
+                        android:text="-- kPa"
                         android:textColor="@color/monitor_metric_value"
                         android:textSize="26sp"
                         android:textStyle="bold" />
@@ -280,9 +283,10 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tvCleanedRows"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="156 行"
+                        android:text="-- 行"
                         android:textColor="@color/monitor_metric_value"
                         android:textSize="26sp"
                         android:textStyle="bold" />
@@ -304,9 +308,10 @@
                         android:textSize="14sp" />
 
                     <TextView
+                        android:id="@+id/tvAntiFallDistance"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="2.10 / 2.05 m"
+                        android:text="-- / -- m"
                         android:textColor="@color/monitor_metric_value"
                         android:textSize="22sp"
                         android:textStyle="bold" />

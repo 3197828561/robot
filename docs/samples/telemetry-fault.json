@@ -1,0 +1,24 @@
+{
+  "schema": "vgsolar.cloud_comm.v1",
+  "type": "telemetry",
+  "device_id": "rk3588",
+  "timestamp_ms": 1717654323000,
+  "status": {
+    "battery_percent": 75.0,
+    "fcu_connected": true,
+    "motion_state": 0,
+    "fault_code": 1001,
+    "temperature_c": 55.0,
+    "total_mileage_m": 12860.5,
+    "cleaned_rows": 157,
+    "pressure_kpa": 101.0,
+    "anti_fall_left_m": 0.45,
+    "anti_fall_right_m": 0.50,
+    "yaw_deg": 190.2,
+    "pitch_deg": 15.0,
+    "linear_velocity_mps": 0.0
+  },
+  "nav_status": {
+    "nav_state": 0
+  }
+}
