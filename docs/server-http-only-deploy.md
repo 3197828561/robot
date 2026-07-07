@@ -85,6 +85,16 @@ cd /opt/robot-platform/app/deploy
 docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
 ```
 
+如果构建卡在 `pip install`，并出现 `files.pythonhosted.org` 超时，说明服务器访问国外 PyPI 太慢。当前 `deploy/api/Dockerfile` 已默认使用阿里云 PyPI 镜像，可先拉取最新代码后重新构建：
+
+```bash
+cd /opt/robot-platform/app
+git pull
+cd deploy
+docker compose -f docker-compose.http-only.yml --env-file .env build --no-cache api
+docker compose -f docker-compose.http-only.yml --env-file .env up -d
+```
+
 查看状态：
 
 ```bash
