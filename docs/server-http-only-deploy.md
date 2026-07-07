@@ -68,9 +68,11 @@ JWT_SECRET=请改成至少32位随机字符串
 EMQX_APP_USERNAME=app_user_001
 EMQX_APP_PASSWORD=不要写入Git的MQTT密码
 
-API_BOOTSTRAP_EMAIL=test@vgsolar.local
-API_BOOTSTRAP_PASSWORD=请改成联调登录密码
+API_BOOTSTRAP_EMAIL=test@vgsolar.com
+API_BOOTSTRAP_PASSWORD=Test123456!
 ```
+
+当前联调测试账号统一使用 `test@vgsolar.com`，密码为 `Test123456!`。
 
 生成随机字符串：
 
@@ -167,7 +169,7 @@ curl http://47.103.157.213/health
 ```bash
 curl -X POST http://47.103.157.213/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"你的API_BOOTSTRAP_PASSWORD"}'
+  -d '{"email":"test@vgsolar.com","password":"你的API_BOOTSTRAP_PASSWORD"}'
 ```
 
 返回中应有 `access_token`。
