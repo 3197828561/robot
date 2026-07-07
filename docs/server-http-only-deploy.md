@@ -128,6 +128,12 @@ docker logs --tail=200 vgsolar-api
 docker compose -f docker-compose.http-only.yml --env-file .env ps
 ```
 
+如果 `docker ps` 显示 `vgsolar-api` 为 `Restarting`，说明 Python 进程启动即退出。当前镜像启动时会先运行 `python -m app.preflight`，日志中会出现：
+
+- `[preflight] missing required env`：`.env` 缺少必填项或值为空
+- `[preflight] database not ready`：API 容器无法连接 PostgreSQL
+- `[preflight] database connection ok`：数据库连接正常，之后如果仍退出，再看 FastAPI/SQLAlchemy 的错误堆栈
+
 最常见原因是 `.env` 里的 `POSTGRES_PASSWORD` 改过，但服务器上已有的 `postgres_data` volume 仍然保留旧数据库密码。PostgreSQL 官方镜像只会在第一次初始化空数据库时读取 `POSTGRES_PASSWORD`，之后修改 `.env` 不会自动改数据库内部密码。
 
 当前是联调环境、数据库里没有重要生产数据时，最简单修复是删除旧 volume 后重建：
