@@ -121,6 +121,27 @@ docker compose -f docker-compose.http-only.yml ps
 curl http://127.0.0.1/health
 ```
 
+如果执行 `up -d --build` 时出现 `dependency api failed to start`，说明 API 容器启动后没有通过健康检查。优先看日志：
+
+```bash
+docker logs --tail=200 vgsolar-api
+docker compose -f docker-compose.http-only.yml --env-file .env ps
+```
+
+最常见原因是 `.env` 里的 `POSTGRES_PASSWORD` 改过，但服务器上已有的 `postgres_data` volume 仍然保留旧数据库密码。PostgreSQL 官方镜像只会在第一次初始化空数据库时读取 `POSTGRES_PASSWORD`，之后修改 `.env` 不会自动改数据库内部密码。
+
+当前是联调环境、数据库里没有重要生产数据时，最简单修复是删除旧 volume 后重建：
+
+```bash
+cd /opt/robot-platform/app/deploy
+docker compose -f docker-compose.http-only.yml --env-file .env down -v
+docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
+docker compose -f docker-compose.http-only.yml --env-file .env ps
+curl http://127.0.0.1/health
+```
+
+注意：`down -v` 会删除本 compose 创建的 PostgreSQL 数据卷，联调样例数据会重新初始化；如果未来已有正式数据，不要直接执行，改用 `ALTER USER` 重置数据库密码。
+
 ## 5. 验证 HTTP
 
 服务器本机：
