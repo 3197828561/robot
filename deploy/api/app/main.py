@@ -14,7 +14,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, create_engine, select
+from sqlalchemy import URL, DateTime, ForeignKey, Integer, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 ALGORITHM = "HS256"
@@ -22,18 +22,35 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 
 class Settings(BaseSettings):
-    database_url: str = Field(alias="DATABASE_URL")
+    database_url: str | None = Field(default=None, alias="DATABASE_URL")
+    postgres_user: str = Field(default="vgsolar", alias="POSTGRES_USER")
+    postgres_password: str = Field(default="", alias="POSTGRES_PASSWORD")
+    postgres_db: str = Field(default="vgsolar", alias="POSTGRES_DB")
+    postgres_host: str = Field(default="postgres", alias="POSTGRES_HOST")
+    postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
     jwt_secret: str = Field(alias="JWT_SECRET")
     bootstrap_email: EmailStr = Field(alias="API_BOOTSTRAP_EMAIL")
     bootstrap_password: str = Field(alias="API_BOOTSTRAP_PASSWORD")
     public_host: str = Field(default="localhost", alias="PUBLIC_HOST")
+
+    def sqlalchemy_url(self) -> str | URL:
+        if self.database_url:
+            return self.database_url
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.postgres_user,
+            password=self.postgres_password,
+            host=self.postgres_host,
+            port=self.postgres_port,
+            database=self.postgres_db,
+        )
 
 
 settings = Settings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 bearer_scheme = HTTPBearer(auto_error=False)
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+engine = create_engine(settings.sqlalchemy_url(), pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

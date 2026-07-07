@@ -103,6 +103,24 @@ docker logs -f vgsolar-api
 docker logs -f vgsolar-nginx
 ```
 
+如果访问 `/health` 返回 `502 Bad Gateway`，说明 Nginx 已启动，但后端 API 暂时不可用。先看 API 日志：
+
+```bash
+docker logs --tail=200 vgsolar-api
+docker logs --tail=100 vgsolar-nginx
+```
+
+当前后端已避免把 PostgreSQL 密码直接拼进 `DATABASE_URL`，因此 `.env` 里的 `POSTGRES_PASSWORD` 即使包含 `@`、`:`、`#` 等特殊字符，也不会破坏数据库连接串。更新代码后重新构建并启动：
+
+```bash
+cd /opt/robot-platform/app
+git pull
+cd deploy
+docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
+docker compose -f docker-compose.http-only.yml ps
+curl http://127.0.0.1/health
+```
+
 ## 5. 验证 HTTP
 
 服务器本机：
