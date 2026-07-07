@@ -10,7 +10,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${POSTGRES_PASSWORD}\" psql -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -c 'SELECT 1' >/dev/null"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -37,20 +37,30 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
       JWT_SECRET: ${JWT_SECRET}
       API_BOOTSTRAP_EMAIL: ${API_BOOTSTRAP_EMAIL}
       API_BOOTSTRAP_PASSWORD: ${API_BOOTSTRAP_PASSWORD}
       PUBLIC_HOST: ${PUBLIC_HOST}
     expose:
       - "8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
 
   nginx:
     image: nginx:1.27-alpine
     container_name: vgsolar-nginx
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "80:80"
       # 启用 HTTPS 时取消下一行注释，并挂载 Let's Encrypt 证书目录

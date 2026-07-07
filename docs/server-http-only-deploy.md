@@ -85,6 +85,16 @@ cd /opt/robot-platform/app/deploy
 docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
 ```
 
+如果构建卡在 `pip install`，并出现 `files.pythonhosted.org` 超时，说明服务器访问国外 PyPI 太慢。当前 `deploy/api/Dockerfile` 已默认使用阿里云 PyPI 镜像，可先拉取最新代码后重新构建：
+
+```bash
+cd /opt/robot-platform/app
+git pull
+cd deploy
+docker compose -f docker-compose.http-only.yml --env-file .env build --no-cache api
+docker compose -f docker-compose.http-only.yml --env-file .env up -d
+```
+
 查看状态：
 
 ```bash
@@ -92,6 +102,51 @@ docker compose -f docker-compose.http-only.yml ps
 docker logs -f vgsolar-api
 docker logs -f vgsolar-nginx
 ```
+
+如果访问 `/health` 返回 `502 Bad Gateway`，说明 Nginx 已启动，但后端 API 暂时不可用。先看 API 日志：
+
+```bash
+docker logs --tail=200 vgsolar-api
+docker logs --tail=100 vgsolar-nginx
+```
+
+当前后端已避免把 PostgreSQL 密码直接拼进 `DATABASE_URL`，因此 `.env` 里的 `POSTGRES_PASSWORD` 即使包含 `@`、`:`、`#` 等特殊字符，也不会破坏数据库连接串。更新代码后重新构建并启动：
+
+```bash
+cd /opt/robot-platform/app
+git pull
+cd deploy
+docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
+docker compose -f docker-compose.http-only.yml ps
+curl http://127.0.0.1/health
+```
+
+如果执行 `up -d --build` 时出现 `dependency api failed to start`，说明 API 容器启动后没有通过健康检查。优先看日志：
+
+```bash
+docker logs --tail=200 vgsolar-api
+docker compose -f docker-compose.http-only.yml --env-file .env ps
+```
+
+如果 `docker ps` 显示 `vgsolar-api` 为 `Restarting`，说明 Python 进程启动即退出。当前镜像启动时会先运行 `python -m app.preflight`，日志中会出现：
+
+- `[preflight] missing required env`：`.env` 缺少必填项或值为空
+- `[preflight] database not ready`：API 容器无法连接 PostgreSQL
+- `[preflight] database connection ok`：数据库连接正常，之后如果仍退出，再看 FastAPI/SQLAlchemy 的错误堆栈
+
+最常见原因是 `.env` 里的 `POSTGRES_PASSWORD` 改过，但服务器上已有的 `postgres_data` volume 仍然保留旧数据库密码。PostgreSQL 官方镜像只会在第一次初始化空数据库时读取 `POSTGRES_PASSWORD`，之后修改 `.env` 不会自动改数据库内部密码。
+
+当前是联调环境、数据库里没有重要生产数据时，最简单修复是删除旧 volume 后重建：
+
+```bash
+cd /opt/robot-platform/app/deploy
+docker compose -f docker-compose.http-only.yml --env-file .env down -v
+docker compose -f docker-compose.http-only.yml --env-file .env up -d --build
+docker compose -f docker-compose.http-only.yml --env-file .env ps
+curl http://127.0.0.1/health
+```
+
+注意：`down -v` 会删除本 compose 创建的 PostgreSQL 数据卷，联调样例数据会重新初始化；如果未来已有正式数据，不要直接执行，改用 `ALTER USER` 重置数据库密码。
 
 ## 5. 验证 HTTP
 
