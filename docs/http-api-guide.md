@@ -23,7 +23,7 @@
 # 登录（替换为你的 ECS IP）
 curl -X POST http://47.103.157.213/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"Test123456!"}'
+  -d '{"email":"test@vgsolar.com","password":"Test123456!"}'
 
 # 设备列表（替换 TOKEN）
 curl http://47.103.157.213/api/devices \

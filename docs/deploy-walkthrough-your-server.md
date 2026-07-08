@@ -247,7 +247,7 @@ JWT_SECRET=VgSolar_Jwt_Secret_32chars_min_abc123
 EMQX_APP_USERNAME=app_user_001
 EMQX_APP_PASSWORD=VgSolar_Mqtt_2026_pQ7n
 
-API_BOOTSTRAP_EMAIL=test@vgsolar.local
+API_BOOTSTRAP_EMAIL=test@vgsolar.com
 API_BOOTSTRAP_PASSWORD=Test123456!
 ```
 
@@ -336,7 +336,7 @@ curl -s http://47.103.157.213/api/health
 # 登录（密码与 .env 中 API_BOOTSTRAP_PASSWORD 一致）
 curl -s -X POST http://47.103.157.213/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"Test123456!"}'
+  -d '{"email":"test@vgsolar.com","password":"Test123456!"}'
 ```
 
 登录成功会返回 JSON，里面有 `access_token`。复制 token 后：
@@ -397,7 +397,7 @@ Broker：tcp://47.103.157.213:1883
 
 --- HTTP API ---
 Base URL：http://47.103.157.213/api
-测试账号：test@vgsolar.local
+测试账号：test@vgsolar.com
 测试密码：（私下发送）
 
 --- EMQX 管理台 ---

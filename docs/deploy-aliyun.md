@@ -314,7 +314,7 @@ EMQX_APP_USERNAME=vgsolar_app
 EMQX_APP_PASSWORD=请改成强密码
 
 # 首个 API 测试用户（联调登录用）
-API_BOOTSTRAP_EMAIL=test@vgsolar.local
+API_BOOTSTRAP_EMAIL=test@vgsolar.com
 API_BOOTSTRAP_PASSWORD=Test123456!
 ```
 
@@ -481,7 +481,7 @@ curl -s http://YOUR_ECS_IP/api/health
 ```bash
 curl -s -X POST http://YOUR_ECS_IP/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"Test123456!"}'
+  -d '{"email":"test@vgsolar.com","password":"Test123456!"}'
 ```
 
 预期返回含 `access_token` 的 JSON。记下 token，下文记为 `YOUR_TOKEN`。
@@ -621,7 +621,7 @@ MQTT 密码：********（私下发送，勿贴群）
 
 --- HTTP API（App 账号 / 业务）---
 API Base URL：http://YOUR_ECS_IP/api
-测试账号：test@vgsolar.local
+测试账号：test@vgsolar.com
 测试密码：********（私下发送）
 
 --- 硬件组 cloud_comm 配置参考 ---
@@ -772,7 +772,7 @@ docker compose ps
 curl -s http://127.0.0.1:8000/health
 curl -s -X POST http://127.0.0.1/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"Test123456!"}'
+  -d '{"email":"test@vgsolar.com","password":"Test123456!"}'
 ```
 
 ---

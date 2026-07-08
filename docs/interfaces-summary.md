@@ -56,7 +56,7 @@ Gradle 会把这些值注入 `BuildConfig`，代码入口：
 curl http://47.103.157.213/health
 curl -X POST http://47.103.157.213/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"test@vgsolar.local","password":"你的API密码"}'
+  -d '{"email":"test@vgsolar.com","password":"你的API密码"}'
 ```
 
 ## 4. MQTT 接口（App ↔ cloud_comm）
@@ -115,4 +115,3 @@ App 会先校验：
 | telemetry 是否含 `schema/type/device_id/timestamp_ms/status` | 硬件组 | 待确认 |
 | HTTP API 是否部署并通过 `/health` | 后端/App | 待验证 |
 | App `local.properties` 是否填入真实 MQTT 密码 | App | 本机填写 |
-
