@@ -15,7 +15,8 @@ data class TokenResponse(
 
 data class DeviceDto(
     @SerializedName("device_id") val deviceId: String,
-    @SerializedName("display_name") val displayName: String
+    @SerializedName("display_name") val displayName: String,
+    @SerializedName(value = "product_type", alternate = ["productType"]) val productType: String? = null
 )
 
 data class JobDto(

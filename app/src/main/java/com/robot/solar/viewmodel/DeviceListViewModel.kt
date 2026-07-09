@@ -39,7 +39,7 @@ class DeviceListViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun selectDevice(device: DeviceDto) {
-        deviceRepository.selectDevice(device.deviceId, device.displayName)
+        deviceRepository.selectDevice(device.deviceId, device.displayName, device.productType)
         _navigateMain.value = true
     }
 

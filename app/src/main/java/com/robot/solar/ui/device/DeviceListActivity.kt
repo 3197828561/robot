@@ -82,7 +82,8 @@ class DeviceListActivity : AppCompatActivity() {
 
             fun bind(item: DeviceDto, onClick: (DeviceDto) -> Unit) {
                 name.text = item.displayName
-                id.text = "ID: ${item.deviceId}"
+                val productType = item.productType?.takeIf { it.isNotBlank() } ?: "--"
+                id.text = "ID: ${item.deviceId}  类型: $productType"
                 itemView.setOnClickListener { onClick(item) }
             }
         }

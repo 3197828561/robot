@@ -8,7 +8,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import com.robot.solar.databinding.ActivityMainBinding
-import com.robot.solar.network.mqtt.TelemetryMessage
+import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.ui.firmware.FirmwareActivity
 import com.robot.solar.ui.job.JobListActivity
 import com.robot.solar.ui.log.LogActivity
@@ -66,7 +66,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         viewModel.batteryPercent.observe(this) { updateBatteryUi(it) }
-        viewModel.telemetry.observe(this) { bindTelemetry(it) }
+        viewModel.status.observe(this) { bindStatus(it) }
         viewModel.lastCmdFeedback.observe(this) { msg ->
             if (!msg.isNullOrBlank()) {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
@@ -74,42 +74,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun bindTelemetry(msg: TelemetryMessage?) {
+    private fun bindStatus(msg: StatusMessage?) {
         if (msg == null) return
-        val status = msg.status ?: return
         val locale = Locale.CHINA
 
-        msg.timestampMs?.let { ts ->
+        msg.timestamp?.let { ts ->
             binding.tvInfoTimestamp.text = "时间戳：$ts"
         }
-        status.yawDeg?.let {
+        msg.yawDeg?.let {
             binding.tvInfoArrayDir.text = "阵列方向：航向 ${String.format(locale, "%.1f", it)}°"
         }
-        status.pitchDeg?.let {
+        msg.pitchDeg?.let {
             binding.tvInfoSlope.text = "坡度：${String.format(locale, "%.1f", it)}°"
         }
-        binding.tvInfoMotion.text = formatMotionState(status)
-        binding.tvInfoDeviceState.text = when (status.faultCode) {
-            0, null -> "设备状态：正常"
-            else -> "设备状态：异常 (${status.faultCode})"
-        }
-        msg.navStatus?.navState?.let {
-            binding.tvInfoJobState.text = formatJobState(it)
-        }
-        status.totalMileageM?.let {
+        binding.tvInfoMotion.text = formatMotionState(msg)
+        binding.tvInfoDeviceState.text = "设备状态：${formatDeviceStatus(msg.deviceStatus)}"
+        msg.workStatus?.let { binding.tvInfoJobState.text = "作业状态：${formatWorkStatus(it)}" }
+        msg.totalMileageM?.let {
             binding.tvTotalMileage.text = String.format(locale, "%,.0f m", it)
         }
-        status.temperatureC?.let {
+        msg.temperatureC?.let {
             binding.tvTemperature.text = String.format(locale, "%.1f °C", it)
         }
-        status.pressureKpa?.let {
+        msg.pressureKpa?.let {
             binding.tvPressure.text = String.format(locale, "%.1f kPa", it)
         }
-        status.cleanedRows?.let {
+        msg.cleanedRows?.let {
             binding.tvCleanedRows.text = "$it 行"
         }
-        val left = status.antiFallLeftM
-        val right = status.antiFallRightM
+        val left = msg.antiFallLeftM
+        val right = msg.antiFallRightM
         if (left != null || right != null) {
             binding.tvAntiFallDistance.text = String.format(
                 locale,
@@ -120,26 +114,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun formatMotionState(status: com.robot.solar.network.mqtt.RoverStatus): String {
-        status.motionState?.let { state ->
-            return when (state) {
-                0 -> "运动状态：静止"
-                1 -> "运动状态：移动中"
-                else -> "运动状态：状态码 $state"
-            }
-        }
-        val v = status.linearVelocityMps
-        return if (v != null && kotlin.math.abs(v) > 0.01) {
-            "运动状态：移动中"
-        } else {
-            "运动状态：静止"
-        }
+    private fun formatMotionState(status: StatusMessage): String = when (status.movementStatus) {
+        "moving" -> "运动状态：移动中"
+        "stopped" -> "运动状态：静止"
+        "turning" -> "运动状态：转向中"
+        "blocked" -> "运动状态：受阻"
+        null -> if (kotlin.math.abs(status.linearSpeedCms ?: 0.0) > 0.1) "运动状态：移动中" else "运动状态：静止"
+        else -> "运动状态：${status.movementStatus}"
     }
 
-    private fun formatJobState(navState: Int): String = when (navState) {
-        0 -> "作业状态：待机"
-        1 -> "作业状态：作业中"
-        else -> "作业状态：导航状态 $navState"
+    private fun formatDeviceStatus(status: String?): String = when (status) {
+        "normal", null -> "正常"
+        "warning" -> "告警"
+        "fault" -> "故障"
+        else -> status
+    }
+
+    private fun formatWorkStatus(status: String): String = when (status) {
+        "idle" -> "待机"
+        "running" -> "运行中"
+        "stopped" -> "已停止"
+        "estopped" -> "急停锁存"
+        "fault" -> "故障"
+        else -> status
     }
 
     private fun updateBatteryUi(real: Int?) {
@@ -150,8 +147,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindControls() {
-        val linear = 0.15
-        val angular = 0.4
+        val linear = 20.0
+        val angular = 0.3
         binding.btnForward.setOnClickListener {
             viewModel.sendRemote("前进", linear, 0.0)
         }

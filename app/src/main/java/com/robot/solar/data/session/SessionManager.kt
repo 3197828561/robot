@@ -22,6 +22,10 @@ class SessionManager private constructor(context: Context) {
         get() = prefs.getString(KEY_DEVICE_NAME, null)
         set(value) = prefs.edit { putString(KEY_DEVICE_NAME, value) }
 
+    var productType: String?
+        get() = prefs.getString(KEY_PRODUCT_TYPE, null)
+        set(value) = prefs.edit { putString(KEY_PRODUCT_TYPE, value) }
+
     var userEmail: String?
         get() = prefs.getString(KEY_EMAIL, null)
         set(value) = prefs.edit { putString(KEY_EMAIL, value) }
@@ -39,6 +43,7 @@ class SessionManager private constructor(context: Context) {
         private const val KEY_TOKEN = "token"
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_DEVICE_NAME = "device_name"
+        private const val KEY_PRODUCT_TYPE = "product_type"
         private const val KEY_EMAIL = "email"
 
         @Volatile

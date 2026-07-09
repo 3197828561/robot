@@ -11,5 +11,6 @@ mqtt.username=app_user_001
 # 不要提交真实密码；从私下保存的联调信息中复制到本机 local.properties
 mqtt.password=填入App_MQTT密码
 
-# 联调默认设备 ID（设备列表未选时 fallback，正式流程从 HTTP 设备列表选择）
-mqtt.default_device_id=rk3588
+# 联调默认设备标识（设备列表未选时 fallback，正式流程从 HTTP 设备列表选择）
+mqtt.product_type=crawler
+mqtt.default_device_id=crawler_00000001

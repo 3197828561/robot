@@ -1,0 +1,21 @@
+{
+  "version": "1.0",
+  "deviceId": "crawler_00000001",
+  "productType": "crawler",
+  "timestamp": "2026-07-08T07:51:01.123Z",
+  "workStatus": "running",
+  "controlMode": "manual",
+  "batteryPercent": 81,
+  "linearSpeedCms": 20.0,
+  "angularSpeedRadps": 0.0,
+  "deviceStatus": "normal",
+  "movementStatus": "moving",
+  "yawDeg": 190.2,
+  "pitchDeg": 12.8,
+  "temperatureC": 43.5,
+  "totalMileageM": 12860.5,
+  "cleanedRows": 157,
+  "pressureKpa": 101.2,
+  "antiFallLeftM": 2.08,
+  "antiFallRightM": 2.03
+}

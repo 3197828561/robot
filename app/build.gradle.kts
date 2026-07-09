@@ -34,7 +34,8 @@ android {
         buildConfigField("int", "MQTT_PORT", prop("mqtt.port", "1883"))
         buildConfigField("String", "MQTT_USERNAME", "\"${prop("mqtt.username", "app_user_001")}\"")
         buildConfigField("String", "MQTT_PASSWORD", "\"${prop("mqtt.password", "")}\"")
-        buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "rk3588")}\"")
+        buildConfigField("String", "MQTT_DEFAULT_PRODUCT_TYPE", "\"${prop("mqtt.product_type", "crawler")}\"")
+        buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "crawler_00000001")}\"")
     }
 
     buildTypes {

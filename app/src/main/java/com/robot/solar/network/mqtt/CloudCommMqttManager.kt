@@ -10,6 +10,7 @@ import androidx.lifecycle.MutableLiveData
 import com.google.gson.Gson
 import com.robot.solar.BuildConfig
 import com.robot.solar.utils.LogUtils
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CoroutineScope
@@ -28,7 +29,7 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
 /**
- * cloud_comm 正式 MQTT 管理：device/{id}/telemetry|event|connection 与 cmd|remote|config
+ * 第一版 APP 与 Robot MQTT 管理：device/{productType}/{deviceId}/{topicType}。
  */
 class CloudCommMqttManager private constructor(private val appContext: Context) {
 
@@ -36,6 +37,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     private val gson = Gson()
     private var client: MqttClient? = null
     private var boundDeviceId: String? = null
+    private var boundProductType: String? = null
     private val connecting = AtomicBoolean(false)
     private var reconnectJob: Job? = null
 
@@ -48,8 +50,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     private val _batteryPercent = MutableLiveData<Int?>(null)
     val batteryPercent: LiveData<Int?> = _batteryPercent
 
-    private val _telemetry = MutableLiveData<TelemetryMessage?>(null)
-    val telemetry: LiveData<TelemetryMessage?> = _telemetry
+    private val _status = MutableLiveData<StatusMessage?>(null)
+    val status: LiveData<StatusMessage?> = _status
 
     private val _lastCmdFeedback = MutableLiveData<String?>(null)
     val lastCmdFeedback: LiveData<String?> = _lastCmdFeedback
@@ -77,9 +79,10 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     }
 
     /** 绑定设备并连接 Broker、订阅上行主题 */
-    fun start(deviceId: String) {
+    fun start(deviceId: String, productType: String = BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE) {
         boundDeviceId = deviceId
-        scope.launch { tryConnectIfNeeded("绑定设备 $deviceId") }
+        boundProductType = productType
+        scope.launch { tryConnectIfNeeded("绑定设备 $productType/$deviceId") }
     }
 
     fun shutdown() {
@@ -109,6 +112,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     }
 
     private fun connectInternal(deviceId: String, reason: String) {
+        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         try {
             LogUtils.system("MQTT 连接：$reason")
             client?.let { old ->
@@ -159,7 +163,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             mqttClient.connect(options)
             client = mqttClient
             _mqttConnected.postValue(true)
-            subscribeTopics(mqttClient, deviceId)
+            subscribeTopics(mqttClient, productType, deviceId)
         } catch (e: Exception) {
             _mqttConnected.postValue(false)
             LogUtils.system("MQTT 连接失败：${e.message}")
@@ -167,15 +171,16 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         }
     }
 
-    private fun subscribeTopics(mqttClient: MqttClient, deviceId: String) {
+    private fun subscribeTopics(mqttClient: MqttClient, productType: String, deviceId: String) {
         val topics = arrayOf(
-            topicTelemetry(deviceId),
-            topicEvent(deviceId),
-            topicConnection(deviceId)
+            topicHeartbeat(productType, deviceId),
+            topicStatus(productType, deviceId),
+            topicCmdAck(productType, deviceId),
+            topicMap(productType, deviceId)
         )
-        val qos = IntArray(3) { QOS }
+        val qos = IntArray(topics.size) { QOS }
         mqttClient.subscribe(topics, qos)
-        LogUtils.system("已订阅 device/$deviceId/* 上行主题")
+        LogUtils.system("已订阅 device/$productType/$deviceId/* 上行主题")
     }
 
     private fun handleMessage(topic: String, payload: String) {
@@ -184,32 +189,33 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             if (!isValidEnvelope(obj, topic)) return
 
             when {
-                topic.endsWith("/telemetry") -> {
-                    val msg = gson.fromJson(payload, TelemetryMessage::class.java)
-                    _telemetry.postValue(msg)
-                    msg.status?.batteryPercent?.let {
+                topic.endsWith("/heartbeat") -> {
+                    val msg = gson.fromJson(payload, HeartbeatMessage::class.java)
+                    _deviceOnline.postValue(msg.online == true)
+                    LogUtils.device("heartbeat：online=${msg.online}")
+                }
+                topic.endsWith("/status") -> {
+                    val msg = gson.fromJson(payload, StatusMessage::class.java)
+                    _status.postValue(msg)
+                    msg.batteryPercent?.let {
                         _batteryPercent.postValue(it.toInt().coerceIn(0, 100))
                     }
-                    msg.status?.fcuConnected?.let { _deviceOnline.postValue(it) }
-                    LogUtils.device("telemetry：battery=${msg.status?.batteryPercent}, fcu=${msg.status?.fcuConnected}")
+                    _deviceOnline.postValue(true)
+                    LogUtils.device("status：battery=${msg.batteryPercent}, work=${msg.workStatus}")
                 }
-                topic.endsWith("/connection") -> {
-                    val msg = gson.fromJson(payload, ConnectionMessage::class.java)
-                    val online = msg.state == "online"
-                    _deviceOnline.postValue(online)
-                    LogUtils.device("connection：${msg.state}")
-                }
-                topic.endsWith("/event") -> {
-                    if (obj.optString("type") == "cmd_feedback") {
-                        val fb = gson.fromJson(payload, CmdFeedbackEvent::class.java)
-                        val text = when (fb.execStatus) {
-                            1 -> "指令执行成功"
-                            2 -> "指令执行失败"
-                            else -> "指令反馈"
-                        }
-                        _lastCmdFeedback.postValue(text)
-                        LogUtils.device("cmd_feedback：$text")
+                topic.endsWith("/cmd_ack") -> {
+                    val ack = gson.fromJson(payload, CmdAckMessage::class.java)
+                    val text = when (ack.ackStatus) {
+                        "success" -> "指令执行成功：${ack.cmd ?: ""}"
+                        "failed" -> "指令执行失败：${ack.message ?: ack.errorCode ?: ""}"
+                        else -> "指令回执：${ack.ackStatus ?: "未知"}"
                     }
+                    _lastCmdFeedback.postValue(text)
+                    LogUtils.device("cmd_ack：$text")
+                }
+                topic.endsWith("/map") -> {
+                    val map = gson.fromJson(payload, MapMessage::class.java)
+                    LogUtils.device("map：${map.mapId ?: ""} ${map.mapJsonUrl ?: ""}")
                 }
             }
         } catch (e: Exception) {
@@ -218,34 +224,30 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     }
 
     /**
-     * 所有 cloud_comm 上行消息必须先通过协议头校验。
+     * 所有硬件上行消息必须先通过设备与产品类型校验。
      * 这样可避免公共/联调 Broker 上其他设备或旧协议消息影响当前设备 UI。
      */
     private fun isValidEnvelope(obj: JSONObject, topic: String): Boolean {
-        val schema = obj.optString("schema")
-        if (schema != SCHEMA) {
-            LogUtils.system("忽略 MQTT 消息：schema 不匹配 topic=$topic schema=$schema")
+        val version = obj.optString("version")
+        if (version != PROTOCOL_VERSION) {
+            LogUtils.system("忽略 MQTT 消息：version 不匹配 topic=$topic version=$version")
             return false
         }
 
-        val deviceId = obj.optString("device_id")
+        val productType = obj.optString("productType")
+        val expectedProductType = boundProductType
+        if (!expectedProductType.isNullOrBlank() && productType != expectedProductType) {
+            LogUtils.system("忽略 MQTT 消息：productType 不匹配 expected=$expectedProductType actual=$productType")
+            return false
+        }
+
+        val deviceId = obj.optString("deviceId")
         val expectedDeviceId = boundDeviceId
         if (!expectedDeviceId.isNullOrBlank() && deviceId != expectedDeviceId) {
-            LogUtils.system("忽略 MQTT 消息：device_id 不匹配 expected=$expectedDeviceId actual=$deviceId")
+            LogUtils.system("忽略 MQTT 消息：deviceId 不匹配 expected=$expectedDeviceId actual=$deviceId")
             return false
         }
 
-        val type = obj.optString("type")
-        val expectedType = when {
-            topic.endsWith("/telemetry") -> "telemetry"
-            topic.endsWith("/connection") -> "connection"
-            topic.endsWith("/event") -> null
-            else -> null
-        }
-        if (expectedType != null && type != expectedType) {
-            LogUtils.system("忽略 MQTT 消息：type 不匹配 topic=$topic type=$type")
-            return false
-        }
         return true
     }
 
@@ -260,44 +262,31 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     /** 低频系统命令：start / stop / pause / resume / estop / clear_estop */
     fun publishCmd(action: String): Boolean {
         val deviceId = boundDeviceId ?: return false
+        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         val json = JSONObject()
-            .put("schema", SCHEMA)
-            .put("type", "cmd")
-            .put("cmd_id", newCmdId())
-            .put("device_id", deviceId)
-            .put("timestamp_ms", System.currentTimeMillis())
-            .put("action", action)
-        return publish(topicCmd(deviceId), json.toString())
+            .put("version", PROTOCOL_VERSION)
+            .put("cmdId", newCmdId())
+            .put("deviceId", deviceId)
+            .put("productType", productType)
+            .put("timestamp", nowTimestamp())
+            .put("cmd", action)
+            .put("params", JSONObject())
+        return publish(topicCmd(productType, deviceId), json.toString())
     }
 
-    /** 遥控速度：前进为正线速度，左转为正角速度 */
-    fun publishRemote(linearMps: Double, angularRadps: Double, durationMs: Int = 300): Boolean {
+    /** 遥控速度：线速度单位 cm/s，前进为正；角速度单位 rad/s。 */
+    fun publishRemote(linearSpeedCms: Double, angularRadps: Double, durationMs: Int = 300): Boolean {
         val deviceId = boundDeviceId ?: return false
+        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         val json = JSONObject()
-            .put("schema", SCHEMA)
-            .put("type", "remote")
-            .put("cmd_id", newCmdId())
-            .put("device_id", deviceId)
-            .put("timestamp_ms", System.currentTimeMillis())
-            .put("linear_velocity_mps", linearMps)
-            .put("angular_velocity_radps", angularRadps)
-            .put("duration_ms", durationMs)
-        return publish(topicRemote(deviceId), json.toString())
-    }
-
-    /** 参数下发：用于后续清洁模式、行数限制、场景参数等 config 接口联调。 */
-    fun publishConfig(paramIndex: Int, paramType: String, value: Number): Boolean {
-        val deviceId = boundDeviceId ?: return false
-        val json = JSONObject()
-            .put("schema", SCHEMA)
-            .put("type", "config")
-            .put("cmd_id", newCmdId())
-            .put("device_id", deviceId)
-            .put("timestamp_ms", System.currentTimeMillis())
-            .put("param_index", paramIndex)
-            .put("param_type", paramType)
-            .put("value", value)
-        return publish(topicConfig(deviceId), json.toString())
+            .put("version", PROTOCOL_VERSION)
+            .put("deviceId", deviceId)
+            .put("productType", productType)
+            .put("timestamp", nowTimestamp())
+            .put("linearSpeedCms", linearSpeedCms)
+            .put("angularSpeedRadps", angularRadps)
+            .put("durationMs", durationMs)
+        return publish(topicRemote(productType, deviceId), json.toString())
     }
 
     private fun publish(topic: String, json: String): Boolean {
@@ -317,18 +306,20 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         }
     }
 
-    private fun newCmdId(): String = "cmd-${System.currentTimeMillis()}"
+    private fun newCmdId(): String = "cmd_${System.currentTimeMillis()}"
+
+    private fun nowTimestamp(): String = Instant.ofEpochMilli(System.currentTimeMillis()).toString()
 
     companion object {
-        private const val SCHEMA = "vgsolar.cloud_comm.v1"
+        private const val PROTOCOL_VERSION = "1.0"
         private const val QOS = 1
 
-        fun topicTelemetry(deviceId: String) = "device/$deviceId/telemetry"
-        fun topicEvent(deviceId: String) = "device/$deviceId/event"
-        fun topicConnection(deviceId: String) = "device/$deviceId/connection"
-        fun topicCmd(deviceId: String) = "device/$deviceId/cmd"
-        fun topicRemote(deviceId: String) = "device/$deviceId/remote"
-        fun topicConfig(deviceId: String) = "device/$deviceId/config"
+        fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"
+        fun topicStatus(productType: String, deviceId: String) = "device/$productType/$deviceId/status"
+        fun topicCmdAck(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd_ack"
+        fun topicMap(productType: String, deviceId: String) = "device/$productType/$deviceId/map"
+        fun topicCmd(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd"
+        fun topicRemote(productType: String, deviceId: String) = "device/$productType/$deviceId/remote"
 
         @Volatile
         private var INSTANCE: CloudCommMqttManager? = null

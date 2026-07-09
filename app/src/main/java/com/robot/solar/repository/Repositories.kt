@@ -1,12 +1,14 @@
 package com.robot.solar.repository
 
 import android.content.Context
+import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.SessionManager
 import com.robot.solar.database.AppDatabase
 import com.robot.solar.entity.LogType
 import com.robot.solar.entity.SolarLogEntity
 import com.robot.solar.network.http.ApiClient
 import com.robot.solar.network.http.dto.LoginRequest
+import com.robot.solar.network.mqtt.DeviceTopicIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -79,16 +81,40 @@ class DeviceRepository private constructor(
         ApiClient.getService(session).listDevices()
     }
 
-    fun selectDevice(deviceId: String, displayName: String) {
+    fun selectDevice(deviceId: String, displayName: String, productType: String?) {
         session.deviceId = deviceId
         session.deviceDisplayName = displayName
+        session.productType = productType?.takeIf { it.isNotBlank() } ?: inferProductType(deviceId)
     }
 
     fun currentDeviceId(): String? = session.deviceId
     fun currentDeviceName(): String? = session.deviceDisplayName
+    fun currentProductType(): String? = session.productType ?: session.deviceId?.let(::inferProductType)
     fun hasDevice(): Boolean = session.hasSelectedDevice()
 
+    fun currentMqttIdentity(): DeviceTopicIdentity {
+        val selectedDeviceId = session.deviceId.orEmpty()
+        val mqttDeviceId = selectedDeviceId.takeIf(::isHardwareDeviceId)
+            ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
+        val productType = session.productType?.takeIf { it.isNotBlank() }
+            ?: inferProductType(mqttDeviceId)
+        return DeviceTopicIdentity(productType = productType, deviceId = mqttDeviceId)
+    }
+
+    private fun inferProductType(deviceId: String): String {
+        return deviceId.substringBefore("_", missingDelimiterValue = "")
+            .takeIf { it in SUPPORTED_PRODUCT_TYPES }
+            ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
+    }
+
+    private fun isHardwareDeviceId(deviceId: String): Boolean {
+        val prefix = deviceId.substringBefore("_", missingDelimiterValue = "")
+        return prefix in SUPPORTED_PRODUCT_TYPES
+    }
+
     companion object {
+        private val SUPPORTED_PRODUCT_TYPES = setOf("crawler", "hanging", "installer")
+
         @Volatile
         private var INSTANCE: DeviceRepository? = null
 

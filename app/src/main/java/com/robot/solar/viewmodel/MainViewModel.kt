@@ -5,9 +5,8 @@ import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.viewModelScope
-import com.robot.solar.BuildConfig
 import com.robot.solar.network.mqtt.CloudCommMqttManager
-import com.robot.solar.network.mqtt.TelemetryMessage
+import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.repository.DeviceRepository
 import com.robot.solar.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +20,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val mqttConnected: LiveData<Boolean> = mqtt.mqttConnected
     val deviceOnline: LiveData<Boolean?> = mqtt.deviceOnline
     val batteryPercent: LiveData<Int?> = mqtt.batteryPercent
-    val telemetry: LiveData<TelemetryMessage?> = mqtt.telemetry
+    val status: LiveData<StatusMessage?> = mqtt.status
     val lastCmdFeedback: LiveData<String?> = mqtt.lastCmdFeedback
 
     val deviceDisplayName: String?
@@ -30,10 +29,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastCommandUptime: Long = 0L
 
     fun onScreenReady() {
-        val deviceId = deviceRepository.currentDeviceId()
-            ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID.takeIf { it.isNotBlank() }
-            ?: return
-        mqtt.start(deviceId)
+        val identity = deviceRepository.currentMqttIdentity()
+        mqtt.start(identity.deviceId, identity.productType)
     }
 
     fun sendRemote(label: String, linear: Double, angular: Double) {

@@ -11,8 +11,9 @@
 | MQTT Broker | `tcp://47.103.157.213:1883` |
 | App MQTT 用户 | `app_user_001` |
 | Robot MQTT 用户 | `robot_device_001` |
-| 默认 device_id | `rk3588` |
-| MQTT Schema | `vgsolar.cloud_comm.v1` |
+| 默认 productType | `crawler` |
+| 默认 deviceId | `crawler_00000001` |
+| MQTT Protocol Version | `1.0` |
 | MQTT Version | `3.1.1` |
 
 密码只允许写入服务器 `.env` 或本机 `local.properties`，不要提交 Git。
@@ -27,7 +28,8 @@ mqtt.host=47.103.157.213
 mqtt.port=1883
 mqtt.username=app_user_001
 mqtt.password=私下保存的App密码
-mqtt.default_device_id=rk3588
+mqtt.product_type=crawler
+mqtt.default_device_id=crawler_00000001
 ```
 
 Gradle 会把这些值注入 `BuildConfig`，代码入口：
@@ -65,36 +67,38 @@ curl -X POST http://47.103.157.213/api/auth/login \
 
 ### 4.1 设备上行，App 订阅
 
-| Topic | Payload type | 用途 | App 处理 |
+| Topic | Payload | 用途 | App 处理 |
 |-------|--------------|------|----------|
-| `device/{device_id}/telemetry` | `telemetry` | 电量、速度、姿态、导航状态 | 主监控页实时刷新 |
-| `device/{device_id}/connection` | `connection` | `online/offline/connection_broken` | 顶部在线状态 |
-| `device/{device_id}/event` | `cmd_feedback` / `param_feedback` | 指令/参数反馈 | Toast + 本地日志 |
+| `device/{productType}/{deviceId}/heartbeat` | `HeartbeatMessage` | 设备在线心跳 | 顶部在线状态 |
+| `device/{productType}/{deviceId}/status` | `StatusMessage` | 电量、工作状态、控制模式、速度、设备状态、运动状态 | 主监控页实时刷新 |
+| `device/{productType}/{deviceId}/cmd_ack` | `CmdAckMessage` | `cmd` 指令处理结果 | Toast + 本地日志 |
+| `device/{productType}/{deviceId}/map` | `MapMessage` | 地图文件通知 | 后续地图展示/下载 |
 
 App 会先校验：
 
-- `schema == "vgsolar.cloud_comm.v1"`
-- `device_id == 当前选中设备`
-- telemetry/connection 的 `type` 与 topic 匹配
+- `version == "1.0"`
+- `productType == 当前设备类型`
+- `deviceId == 当前设备 ID`
 
 ### 4.2 App 下行，设备订阅
 
 | Topic | Payload type | 用途 | App 入口 |
 |-------|--------------|------|----------|
-| `device/{device_id}/remote` | `remote` | 摇杆遥控速度 | `publishRemote()` |
-| `device/{device_id}/cmd` | `cmd` | start/stop/pause/resume/estop | `publishCmd()` |
-| `device/{device_id}/config` | `config` | 参数下发 | `publishConfig()` |
+| `device/{productType}/{deviceId}/remote` | `remote` | 速度型摇杆遥控 | `publishRemote()` |
+| `device/{productType}/{deviceId}/cmd` | `cmd` | start/stop/estop/clear_estop | `publishCmd()` |
 
 遥控映射：
 
-| 操作 | `linear_velocity_mps` | `angular_velocity_radps` |
+| 操作 | `linearSpeedCms` | `angularSpeedRadps` |
 |------|------------------------|--------------------------|
-| 前进 | `+0.15` | `0.0` |
-| 后退 | `-0.15` | `0.0` |
-| 左转 | `0.0` | `+0.4` |
-| 右转 | `0.0` | `-0.4` |
+| 前进 | `+20.0` | `0.0` |
+| 后退 | `-20.0` | `0.0` |
+| 左转 | `0.0` | `+0.3` |
+| 右转 | `0.0` | `-0.3` |
 | 停止 | `0.0` | `0.0` |
-| 急停 | 发布 `cmd.action = "estop"` | - |
+| 急停 | 发布 `cmd = "estop"` | - |
+
+`remote` 使用 `durationMs = 300`，硬件侧超过 `1000ms` 未收到新的 `remote` 应自动停车。
 
 ## 5. 服务器部署入口
 
@@ -110,8 +114,8 @@ App 会先校验：
 
 | 问题 | 负责人 | 状态 |
 |------|--------|------|
-| 硬件真实 `device_id` 是否为 `rk3588` | 硬件组 | 待确认 |
-| `cloud_comm` 是否使用 `device/{device_id}/...` 主题 | 硬件组 | 待确认 |
-| telemetry 是否含 `schema/type/device_id/timestamp_ms/status` | 硬件组 | 待确认 |
+| 硬件真实 `productType/deviceId` 是否为 `crawler/crawler_00000001` | 硬件组 | 待确认 |
+| HTTP 设备列表是否返回 `product_type/productType` 与新 `device_id` | 后端/App | 待同步 |
+| Robot 是否按 `heartbeat/status/cmd_ack/map` 上报 | 硬件组 | 待确认 |
 | HTTP API 是否部署并通过 `/health` | 后端/App | 待验证 |
 | App `local.properties` 是否填入真实 MQTT 密码 | App | 本机填写 |
