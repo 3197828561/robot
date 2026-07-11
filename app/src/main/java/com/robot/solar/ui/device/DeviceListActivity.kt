@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
@@ -12,14 +13,20 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.robot.solar.data.session.SessionManager
 import com.robot.solar.databinding.ActivityDeviceListBinding
 import com.robot.solar.network.http.dto.DeviceDto
+import com.robot.solar.repository.AuthRepository
+import com.robot.solar.ui.login.LoginActivity
 import com.robot.solar.ui.main.MainActivity
+import com.robot.solar.utils.LogUtils
 import com.robot.solar.viewmodel.DeviceListViewModel
 
 class DeviceListActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDeviceListBinding
+    private val authRepository by lazy { AuthRepository.getInstance(this) }
+    private val session by lazy { SessionManager.getInstance(this) }
     private val viewModel: DeviceListViewModel by viewModels()
     private val adapter = DeviceAdapter { viewModel.selectDevice(it) }
 
@@ -30,6 +37,7 @@ class DeviceListActivity : AppCompatActivity() {
 
         binding.rvDevices.layoutManager = LinearLayoutManager(this)
         binding.rvDevices.adapter = adapter
+        binding.btnUserCenter.setOnClickListener { showUserMenu() }
 
         viewModel.devices.observe(this) { list ->
             adapter.submit(list)
@@ -51,6 +59,34 @@ class DeviceListActivity : AppCompatActivity() {
         }
 
         viewModel.loadDevices()
+    }
+
+    private fun showUserMenu() {
+        val account = session.userEmail?.takeIf { it.isNotBlank() } ?: "当前账号"
+        PopupMenu(this, binding.btnUserCenter).apply {
+            menu.add(account).isEnabled = false
+            menu.add("切换账号")
+            menu.add("退出登录")
+            setOnMenuItemClickListener { item ->
+                when (item.title.toString()) {
+                    "切换账号", "退出登录" -> {
+                        logoutToLogin(item.title.toString())
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }.show()
+    }
+
+    private fun logoutToLogin(action: String) {
+        LogUtils.login(action)
+        authRepository.logout()
+        val intent = Intent(this, LoginActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        startActivity(intent)
+        finish()
     }
 
     private class DeviceAdapter(

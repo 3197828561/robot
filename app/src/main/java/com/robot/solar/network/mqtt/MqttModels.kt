@@ -21,6 +21,11 @@ data class StatusMessage(
     val angularSpeedRadps: Double?,
     val deviceStatus: String?,
     val movementStatus: String?,
+    val currentBlockId: String?,
+    val currentCellId: String?,
+    val positionX: Double?,
+    val positionY: Double?,
+    val headingDeg: Double?,
     /** 兼容 UI 展示的可选扩展字段，硬件第一版未强制要求。 */
     val yawDeg: Double?,
     val pitchDeg: Double?,
@@ -60,4 +65,62 @@ data class MapMessage(
 data class DeviceTopicIdentity(
     val productType: String,
     val deviceId: String
+)
+
+data class CmdMessage(
+    val version: String,
+    val cmdId: String,
+    val deviceId: String,
+    val productType: String,
+    val timestamp: String,
+    val cmd: String,
+    val params: Map<String, Any?> = emptyMap()
+)
+
+data class RemoteMessage(
+    val version: String,
+    val deviceId: String,
+    val productType: String,
+    val timestamp: String,
+    val linearSpeedCms: Double,
+    val angularSpeedRadps: Double,
+    val durationMs: Int
+)
+
+data class CommandPublishResult(
+    val published: Boolean,
+    val cmdId: String?,
+    val cmd: String
+)
+
+data class CommandUiState(
+    val cmdId: String?,
+    val cmd: String?,
+    val status: CommandStatus,
+    val message: String? = null,
+    val errorCode: String? = null,
+    val timestampMillis: Long = System.currentTimeMillis()
+)
+
+enum class CommandStatus {
+    IDLE,
+    SENDING,
+    SUCCESS,
+    FAILED,
+    TIMEOUT,
+    CONNECTION_LOST
+}
+
+enum class MapLoadStatus {
+    NO_MAP,
+    DOWNLOADING,
+    READY,
+    FAILED
+}
+
+data class MapUiState(
+    val status: MapLoadStatus = MapLoadStatus.NO_MAP,
+    val message: String = "暂无地图",
+    val map: MapMessage? = null,
+    val cachePath: String? = null
 )

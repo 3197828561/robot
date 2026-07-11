@@ -10,12 +10,11 @@
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="72dp"
         android:background="@color/control_top_bar"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingHorizontal="18dp"
-        android:paddingVertical="14dp">
+        android:paddingHorizontal="22dp">
 
         <LinearLayout
             android:layout_width="0dp"
@@ -46,8 +45,8 @@
             android:id="@+id/btnDeviceList"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="wrap_content"
-            android:layout_height="44dp"
-            android:text="设备列表"
+            android:layout_height="40dp"
+            android:text="返回设备列表"
             android:textColor="@color/control_on_dark"
             app:cornerRadius="22dp"
             app:strokeColor="@color/control_on_dark_muted" />
@@ -59,21 +58,24 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <androidx.core.widget.NestedScrollView
+        <LinearLayout
             android:id="@+id/sectionHome"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:fillViewport="true"
-            android:padding="12dp">
+            android:baselineAligned="false"
+            android:orientation="horizontal"
+            android:padding="10dp">
 
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.35"
                 android:orientation="vertical">
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
-                    android:layout_height="260dp"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     app:cardBackgroundColor="@color/control_panel"
                     app:cardCornerRadius="10dp"
                     app:strokeColor="@color/control_stroke"
@@ -83,7 +85,7 @@
                         android:id="@+id/mapPreview"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:padding="16dp">
+                        android:padding="14dp">
 
                         <LinearLayout
                             android:layout_width="wrap_content"
@@ -95,7 +97,7 @@
                                 android:id="@+id/btnReloadMap"
                                 style="?attr/materialButtonTonalStyle"
                                 android:layout_width="wrap_content"
-                                android:layout_height="40dp"
+                                android:layout_height="36dp"
                                 android:text="重新加载地图"
                                 android:textSize="12sp"
                                 app:cornerRadius="8dp" />
@@ -104,7 +106,7 @@
                                 android:id="@+id/btnCenterRobot"
                                 style="?attr/materialButtonTonalStyle"
                                 android:layout_width="wrap_content"
-                                android:layout_height="40dp"
+                                android:layout_height="36dp"
                                 android:layout_marginStart="8dp"
                                 android:text="居中机器人"
                                 android:textSize="12sp"
@@ -139,16 +141,47 @@
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_weight="0.52"
+                    app:cardBackgroundColor="@color/control_panel"
+                    app:cardCornerRadius="10dp"
+                    app:strokeColor="@color/control_stroke"
+                    app:strokeWidth="1dp">
+
+                    <TextView
+                        android:id="@+id/tvHomeStatusSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:lineSpacingExtra="2dp"
+                        android:paddingHorizontal="14dp"
+                        android:paddingVertical="10dp"
+                        android:textColor="@color/control_text"
+                        android:textSize="13sp"
+                        tools:text="工作状态：--" />
+                </com.google.android.material.card.MaterialCardView>
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
                     android:baselineAligned="false"
-                    android:orientation="vertical">
+                    android:orientation="horizontal">
 
                     <com.google.android.material.card.MaterialCardView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
                         app:cardBackgroundColor="@color/control_panel"
                         app:cardCornerRadius="10dp"
                         app:strokeColor="@color/control_stroke"
@@ -216,9 +249,10 @@
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="10dp"
+                        android:layout_weight="1"
                         app:cardBackgroundColor="@color/control_panel"
                         app:cardCornerRadius="10dp"
                         app:strokeColor="@color/control_stroke"
@@ -241,8 +275,8 @@
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnStart"
                                 android:layout_width="match_parent"
-                                android:layout_height="50dp"
-                                android:layout_marginTop="14dp"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="12dp"
                                 android:text="开始运行"
                                 android:textColor="@color/solar_on_primary"
                                 app:backgroundTint="@color/control_primary"
@@ -251,8 +285,8 @@
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnStopRun"
                                 android:layout_width="match_parent"
-                                android:layout_height="50dp"
-                                android:layout_marginTop="10dp"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
                                 android:text="停止运行"
                                 android:textColor="@color/solar_on_primary"
                                 app:backgroundTint="@color/control_warning"
@@ -261,11 +295,10 @@
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnEmergency"
                                 android:layout_width="match_parent"
-                                android:layout_height="52dp"
-                                android:layout_marginTop="10dp"
+                                android:layout_height="50dp"
+                                android:layout_marginTop="8dp"
                                 android:text="紧急停止"
                                 android:textColor="@color/solar_on_primary"
-                                android:textSize="16sp"
                                 android:textStyle="bold"
                                 app:backgroundTint="@color/control_danger"
                                 app:cornerRadius="8dp" />
@@ -274,8 +307,8 @@
                                 android:id="@+id/btnClearEstop"
                                 style="?attr/materialButtonOutlinedStyle"
                                 android:layout_width="match_parent"
-                                android:layout_height="50dp"
-                                android:layout_marginTop="10dp"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
                                 android:text="解除急停"
                                 app:cornerRadius="8dp" />
                         </LinearLayout>
@@ -284,8 +317,9 @@
 
                 <com.google.android.material.card.MaterialCardView
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_height="0dp"
+                    android:layout_marginTop="10dp"
+                    android:layout_weight="0.52"
                     app:cardBackgroundColor="@color/control_panel"
                     app:cardCornerRadius="10dp"
                     app:strokeColor="@color/control_stroke"
@@ -293,9 +327,9 @@
 
                     <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="match_parent"
                         android:orientation="vertical"
-                        android:padding="16dp">
+                        android:padding="14dp">
 
                         <TextView
                             android:layout_width="match_parent"
@@ -309,7 +343,7 @@
                             android:id="@+id/tvCommandState"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
+                            android:layout_marginTop="8dp"
                             android:text="-- / -- / --"
                             android:textColor="@color/control_text_muted"
                             android:textSize="14sp" />
@@ -318,28 +352,28 @@
                             android:id="@+id/btnViewLogs"
                             style="?attr/materialButtonOutlinedStyle"
                             android:layout_width="match_parent"
-                            android:layout_height="46dp"
-                            android:layout_marginTop="12dp"
+                            android:layout_height="40dp"
+                            android:layout_marginTop="8dp"
                             android:text="@string/view_logs"
                             android:textSize="14sp"
                             app:cornerRadius="8dp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
-        </androidx.core.widget.NestedScrollView>
+        </LinearLayout>
 
-        <androidx.core.widget.NestedScrollView
+        <FrameLayout
             android:id="@+id/sectionMap"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:fillViewport="true"
             android:padding="12dp"
             android:visibility="gone">
 
             <FrameLayout
                 android:layout_width="match_parent"
-                android:layout_height="520dp"
-                android:background="@color/control_panel">
+                android:layout_height="match_parent"
+                android:background="@color/control_panel"
+                android:padding="16dp">
 
                 <TextView
                     android:id="@+id/tvMapPageState"
@@ -351,141 +385,113 @@
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
-                <LinearLayout
+                <TextView
+                    android:id="@+id/tvMapPageMeta"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="top|start"
-                    android:layout_margin="16dp"
+                    android:layout_gravity="bottom|start"
                     android:background="@color/control_legend_bg"
-                    android:orientation="vertical"
-                    android:padding="12dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="● 机器人位置"
-                        android:textColor="@color/control_success"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="- - - 运行轨迹（10s）"
-                        android:textColor="@color/control_success"
-                        android:textSize="13sp" />
-
-                    <TextView
-                        android:id="@+id/tvMapPageMeta"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="地图版本：--"
-                        android:textColor="@color/control_text_muted"
-                        android:textSize="13sp" />
-                </LinearLayout>
+                    android:padding="12dp"
+                    android:text="地图版本：--"
+                    android:textColor="@color/control_text_muted"
+                    android:textSize="13sp" />
             </FrameLayout>
-        </androidx.core.widget.NestedScrollView>
+        </FrameLayout>
 
-        <androidx.core.widget.NestedScrollView
+        <LinearLayout
             android:id="@+id/sectionRemote"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:fillViewport="true"
+            android:baselineAligned="false"
+            android:orientation="horizontal"
             android:padding="12dp"
             android:visibility="gone">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.1"
+                app:cardBackgroundColor="@color/control_panel"
+                app:cardCornerRadius="10dp"
+                app:strokeColor="@color/control_stroke"
+                app:strokeWidth="1dp">
 
-                <com.google.android.material.card.MaterialCardView
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    app:cardBackgroundColor="@color/control_panel"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/control_stroke"
-                    app:strokeWidth="1dp">
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="20dp">
 
-                    <LinearLayout
+                    <com.robot.solar.ui.main.JoystickView
+                        android:id="@+id/joystick"
+                        android:layout_width="300dp"
+                        android:layout_height="300dp" />
+
+                    <TextView
+                        android:id="@+id/tvRemoteHint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="松开摇杆自动停止"
+                        android:textColor="@color/control_text_muted"
+                        android:textSize="15sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                app:cardBackgroundColor="@color/control_panel"
+                app:cardCornerRadius="10dp"
+                app:strokeColor="@color/control_stroke"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_horizontal"
-                        android:orientation="vertical"
-                        android:padding="20dp">
+                        android:text="控制状态"
+                        android:textColor="@color/control_title"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="手动遥控"
-                            android:textColor="@color/control_title"
-                            android:textSize="18sp"
-                            android:textStyle="bold" />
-
-                        <com.robot.solar.ui.main.JoystickView
-                            android:id="@+id/joystick"
-                            android:layout_width="260dp"
-                            android:layout_height="260dp"
-                            android:layout_marginTop="12dp" />
-
-                        <TextView
-                            android:id="@+id/tvRemoteHint"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="10dp"
-                            android:text="松开摇杆自动停止"
-                            android:textColor="@color/control_text_muted"
-                            android:textSize="14sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    app:cardBackgroundColor="@color/control_panel"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/control_stroke"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
+                    <TextView
+                        android:id="@+id/tvRemoteStatus"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical">
+                        android:layout_height="0dp"
+                        android:layout_marginTop="16dp"
+                        android:layout_weight="1"
+                        android:lineSpacingExtra="7dp"
+                        android:textColor="@color/control_text"
+                        android:textSize="15sp"
+                        tools:text="在线状态：--" />
 
-                        <TextView
-                            android:id="@+id/tvRemoteStatus"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:lineSpacingExtra="6dp"
-                            android:padding="16dp"
-                            android:textColor="@color/control_text"
-                            android:textSize="14sp"
-                            tools:text="在线状态：--" />
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRemoteEmergency"
+                        android:layout_width="match_parent"
+                        android:layout_height="64dp"
+                        android:text="紧急停止"
+                        android:textColor="@color/solar_on_primary"
+                        android:textSize="20sp"
+                        android:textStyle="bold"
+                        app:backgroundTint="@color/control_danger"
+                        app:cornerRadius="10dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnRemoteEmergency"
-                            android:layout_width="match_parent"
-                            android:layout_height="56dp"
-                            android:layout_marginHorizontal="16dp"
-                            android:layout_marginBottom="16dp"
-                            android:text="紧急停止"
-                            android:textColor="@color/solar_on_primary"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            app:backgroundTint="@color/control_danger"
-                            app:cornerRadius="10dp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-        </androidx.core.widget.NestedScrollView>
-
-        <androidx.core.widget.NestedScrollView
+        <FrameLayout
             android:id="@+id/sectionStatus"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:fillViewport="true"
             android:padding="12dp"
             android:visibility="gone">
 
@@ -501,19 +507,19 @@
                     android:id="@+id/tvStatusDetails"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:lineSpacingExtra="7dp"
-                    android:padding="18dp"
+                    android:lineSpacingExtra="8dp"
+                    android:padding="20dp"
                     android:textColor="@color/control_text"
                     android:textSize="15sp"
                     tools:text="设备名称：--" />
             </com.google.android.material.card.MaterialCardView>
-        </androidx.core.widget.NestedScrollView>
+        </FrameLayout>
     </FrameLayout>
 
     <LinearLayout
         android:id="@+id/bottomNav"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="56dp"
         android:background="@color/control_bottom_bar"
         android:gravity="center"
         android:orientation="horizontal">
