@@ -384,10 +384,24 @@ $Password = if ($PasswordOverride) { $PasswordOverride } else { Get-Prop $props 
 $ProductType = if ($ProductTypeOverride) { $ProductTypeOverride } else { Get-Prop $props @("mqtt.product_type") "crawler" }
 $DeviceId = if ($DeviceIdOverride) { $DeviceIdOverride } else { Get-Prop $props @("mqtt.default_device_id") "crawler_00000001" }
 
-$PubExe = Join-Path $MosquittoDir "mosquitto_pub.exe"
-$SubExe = Join-Path $MosquittoDir "mosquitto_sub.exe"
-if (!(Test-Path $PubExe)) { throw "Cannot find $PubExe" }
-if (!(Test-Path $SubExe)) { throw "Cannot find $SubExe" }
+function Resolve-MosquittoExe {
+    param(
+        [string]$FileName,
+        [string[]]$PathNames
+    )
+    $candidate = Join-Path $MosquittoDir $FileName
+    if ($MosquittoDir -and (Test-Path $candidate)) {
+        return $candidate
+    }
+    foreach ($name in $PathNames) {
+        $cmd = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($cmd) { return $cmd.Source }
+    }
+    throw "Cannot find $FileName. Install Mosquitto clients, add them to PATH, or pass -MosquittoDir."
+}
+
+$PubExe = Resolve-MosquittoExe "mosquitto_pub.exe" @("mosquitto_pub.exe", "mosquitto_pub")
+$SubExe = Resolve-MosquittoExe "mosquitto_sub.exe" @("mosquitto_sub.exe", "mosquitto_sub")
 
 $TopicPrefix = "device/$ProductType/$DeviceId"
 
