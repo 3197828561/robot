@@ -58,126 +58,39 @@ mqtt.default_device_id=crawler_00000001
 - 增加系统栏 inset 自适应，避免平板任务栏或导航栏遮挡 App。
 - 增加 `tools/mqtt-robot-sim.ps1`，可在一个命令行窗口内模拟机器人上报并监听 App 下发。
 
-## 验证命令
-
-Windows PowerShell 示例：
-
-```powershell
-$env:JAVA_HOME='D:\AAwork\Android\Android Studio\jbr'
-.\gradlew.bat testDebugUnitTest assembleDebug
-```
-
-如果本机 Java 已经在 PATH 中，也可以直接执行：
+验证命令：
 
 ```powershell
 .\gradlew.bat testDebugUnitTest assembleDebug
 ```
 
-## 回退到最初版本
+## 回退到最初 UI 版本
 
-本次大改前已经打了备份 tag：
+本次 UI/MQTT 大改前的备份 tag：
 
 ```text
 before-first-version-ui
 ```
 
-该 tag 指向：
+对应提交：
 
 ```text
 46a9dde docs: add first version app requirements
 ```
 
-下面按常见场景说明如何回退。
-
-### 1. 先确认当前状态
+回退命令：
 
 ```bash
-git status
-git branch --show-current
-git tag --list
-git log --oneline --decorate -5
-```
-
-如果 `git status` 显示有未提交改动，先提交、暂存或放弃这些改动，再做回退操作。
-
-### 2. 只想临时查看最初版本
-
-这种方式不会修改当前分支历史，适合只是打开旧代码看一眼：
-
-```bash
-git checkout before-first-version-ui
-```
-
-查看结束后回到当前开发分支：
-
-```bash
-git checkout feature/first-version-app
-```
-
-注意：临时 checkout tag 会进入 detached HEAD 状态，不建议在这个状态下直接开发。
-
-### 3. 想基于最初版本重新开一个恢复分支
-
-这种方式最安全，适合需要保留当前版本，同时另开一条线恢复旧版：
-
-```bash
-git checkout -b restore-before-first-version-ui before-first-version-ui
-```
-
-如果需要推送这个恢复分支：
-
-```bash
-git push origin restore-before-first-version-ui
-```
-
-### 4. 当前版本已经推送，但想在原分支撤销它
-
-推荐用 `git revert`。它会新增一个“反向提交”，不会改写 GitHub 历史。
-
-先确认要撤销的提交，例如当前版本是：
-
-```text
-00ad3be feat: implement first version app control UI
-```
-
-执行：
-
-```bash
+git fetch --all --tags
 git checkout feature/first-version-app
 git pull origin feature/first-version-app
-git revert 00ad3be
+git revert --no-edit before-first-version-ui..HEAD
 git push origin feature/first-version-app
 ```
 
-适用场景：
-
-- 当前提交已经推送到 GitHub；
-- 其他人可能已经拉取了这个分支；
-- 希望保留完整历史。
-
-### 5. 只在本地强制回到最初版本
-
-只有在确认本地改动都不要了，并且清楚风险时才使用：
+如果只是想从最初 UI 版本新建一个恢复分支，不影响当前分支，执行：
 
 ```bash
-git checkout feature/first-version-app
-git reset --hard before-first-version-ui
+git fetch --all --tags
+git checkout -b restore-before-first-version-ui before-first-version-ui
 ```
-
-如果还要强制覆盖远端分支，需要额外执行：
-
-```bash
-git push --force-with-lease origin feature/first-version-app
-```
-
-不推荐日常使用强推。多人协作时优先使用 `git revert`。
-
-### 6. 回退后重新运行验证
-
-无论使用哪种方式，回退后建议执行：
-
-```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug
-```
-
-确认旧版本仍能构建。
