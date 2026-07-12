@@ -3,7 +3,10 @@ package com.robot.solar.ui.log
 import android.os.Bundle
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.robot.solar.databinding.ActivityLogBinding
 import com.robot.solar.utils.LogUtils
@@ -25,6 +28,7 @@ class LogActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLogBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        applySystemBarInsets()
 
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -47,5 +51,23 @@ class LogActivity : AppCompatActivity() {
                 binding.swipeRefresh.isRefreshing = false
             }
         }
+    }
+
+    private fun applySystemBarInsets() {
+        val initialLeft = binding.root.paddingLeft
+        val initialTop = binding.root.paddingTop
+        val initialRight = binding.root.paddingRight
+        val initialBottom = binding.root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            view.updatePadding(
+                left = initialLeft + bars.left,
+                top = initialTop + bars.top,
+                right = initialRight + bars.right,
+                bottom = initialBottom + bars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(binding.root)
     }
 }

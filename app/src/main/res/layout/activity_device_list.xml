@@ -3,25 +3,45 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/monitor_bg">
+    android:background="@color/control_page_bg">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/toolbar"
         android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:background="@color/monitor_top_bar"
+        android:layout_height="72dp"
+        android:background="@color/control_top_bar"
+        android:contentInsetEnd="156dp"
+        android:contentInsetStart="16dp"
         android:title="选择设备"
-        android:titleTextColor="@color/monitor_on_dark"
+        android:titleTextColor="@color/control_on_dark"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnUserCenter"
+        style="?attr/materialButtonOutlinedStyle"
+        android:layout_width="wrap_content"
+        android:layout_height="42dp"
+        android:layout_marginEnd="16dp"
+        android:text="用户中心"
+        android:textColor="@color/control_on_dark"
+        android:textSize="14sp"
+        app:cornerRadius="21dp"
+        app:icon="@android:drawable/ic_menu_myplaces"
+        app:iconGravity="textStart"
+        app:iconTint="@color/control_on_dark"
+        app:layout_constraintBottom_toBottomOf="@id/toolbar"
+        app:layout_constraintEnd_toEndOf="@id/toolbar"
+        app:layout_constraintTop_toTopOf="@id/toolbar"
+        app:strokeColor="@color/control_on_dark_muted" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rvDevices"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:clipToPadding="false"
-        android:padding="12dp"
+        android:padding="14dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -42,7 +62,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="暂无绑定设备"
-        android:textColor="@color/monitor_on_dark_muted"
+        android:textColor="@color/control_text_muted"
+        android:textSize="16sp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

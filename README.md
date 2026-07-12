@@ -1,51 +1,96 @@
-# 光伏机器人远程控制（正式版）
+# Solar Robot Android App
 
-包名：`com.robot.solar`  
-对标怪虫 AI-Kwun · 通信协议 `vgsolar.cloud_comm.v1` · HTTP 业务 API
+光伏机器人远程控制 APP。仓库包含 Android 客户端、接口文档、部署说明和本地 MQTT 机器人模拟器。
 
-## 文档
+## 快速开始
 
-| 文档 | 说明 |
-|------|------|
-| [docs/deploy-aliyun.md](docs/deploy-aliyun.md) | 阿里云从零部署 EMQX + API + PostgreSQL |
-| [docs/server-http-only-deploy.md](docs/server-http-only-deploy.md) | 当前服务器已部署 EMQX 时，只补 HTTP API |
-| [docs/interfaces-summary.md](docs/interfaces-summary.md) | App / HTTP / MQTT / 硬件接口总览 |
-| [docs/http-api-guide.md](docs/http-api-guide.md) | HTTP 接口协作与 App 联调 |
-| [docs/openapi.yaml](docs/openapi.yaml) | REST 契约 |
-| [docs/api-gap-extension.md](docs/api-gap-extension.md) | 说明书字段扩展规划 |
-| [docs/integration-protocol-v1.md](docs/integration-protocol-v1.md) | **联调协议 v1**（App ↔ 硬件组） |
-| [docs/cloud-comm-api.md](docs/cloud-comm-api.md) | MQTT 主题速查 |
-| [docs/desktop-mqtt-test.md](docs/desktop-mqtt-test.md) | 桌面 MQTT 环回测试 |
-| [docs/preflight-checklist.md](docs/preflight-checklist.md) | 周三预联调检查 |
-| [docs/integration-report-template.md](docs/integration-report-template.md) | 联调报告模板 |
-| [docs/integration-backlog.md](docs/integration-backlog.md) | 联调后迭代 backlog |
-| [docs/hw-integration-checklist.md](docs/hw-integration-checklist.md) | D4 硬件联调清单（含现场步骤） |
-| [docs/context-handoff.md](docs/context-handoff.md) | 当前上下文压缩摘要 |
-| [local.properties.example](local.properties.example) | App 连接配置模板 |
-| [deploy/](deploy/) | Docker Compose 一键后端 |
+1. 克隆仓库。
+2. 复制 `local.properties.example` 为 `local.properties`。
+3. 填入 HTTP 和 MQTT 配置。
+4. 使用 Android Studio 打开项目并 Sync。
+5. 运行 App，登录后进入设备列表，选择设备进入控制台。
 
-## App 配置
-
-复制 `local.properties.example` 为 `local.properties`（勿提交 Git）：
+`local.properties` 示例：
 
 ```properties
-api.base.url=http://47.103.157.213/api
-mqtt.host=47.103.157.213
+api.base.url=http://your-server.example/api
+mqtt.host=your-mqtt-host.example
 mqtt.port=1883
 mqtt.username=app_user_001
-mqtt.password=你的App MQTT密码
+mqtt.password=your_app_mqtt_password
+mqtt.product_type=crawler
+mqtt.default_device_id=crawler_00000001
 ```
 
-默认测试账号（API 首次启动自动创建）：见 `deploy/.env.example`
+真实密码不要提交到 Git。
 
-## 运行流程
+## 重要文档
 
-1. 当前服务器已部署 EMQX，先按 `docs/server-http-only-deploy.md` 只补 HTTP API
-2. Android Studio Sync → Run
-3. 登录 → 选择设备 → 主监控页（MQTT telemetry + 摇杆 remote）
+| 文档 | 用途 |
+| --- | --- |
+| [docs/requirements/第一版APP需求分析文档.md](docs/requirements/第一版APP需求分析文档.md) | 第一版 APP 需求和 MQTT 协议 |
+| [docs/interfaces-summary.md](docs/interfaces-summary.md) | HTTP / MQTT / App / Robot 接口总览 |
+| [docs/openapi.yaml](docs/openapi.yaml) | HTTP API 契约 |
+| [docs/server-http-only-deploy.md](docs/server-http-only-deploy.md) | 已有 MQTT 服务时部署 HTTP API |
+| [docs/deploy-aliyun.md](docs/deploy-aliyun.md) | 从零部署云端服务 |
+| [tools/README.md](tools/README.md) | MQTT 机器人模拟器使用说明 |
 
-## 架构
+## 本次版本内容
 
-- **HTTP**：登录、设备列表、作业记录、固件、WiFi  
-- **MQTT**：telemetry / event / connection / cmd / remote  
-- **Room**：本地操作日志（联调排障）
+当前第一版控制台实现提交：
+
+```text
+00ad3be feat: implement first version app control UI
+```
+
+主要内容：
+
+- 主控 UI 按需求重做为顶部栏、底部导航、首页、地图页、手动遥控页、状态详情页。
+- 增加平板宽屏布局 `app/src/main/res/layout-sw600dp/activity_main.xml`，默认布局继续适配手机和窄屏。
+- 设备列表页增加右上角用户中心，可切换账号或退出登录。
+- 首页增加日志入口，日志页继续展示本地 Room 日志。
+- MQTT 主题统一为 `device/{productType}/{deviceId}/{topicType}`。
+- 进入设备后订阅 `heartbeat`、`status`、`cmd_ack`、`map`。
+- 自动控制命令支持 `start`、`stop`、`estop`、`clear_estop`。
+- 命令回执按 `cmdId` 匹配，5 秒未收到匹配回执显示超时。
+- 在线状态只由 `heartbeat` 判断，超过 3 秒未收到心跳显示离线。
+- 手动遥控改为 360 度虚拟摇杆，按住 0.5 秒后周期发布 `remote`，松手发送零速度。
+- 增加系统栏 inset 自适应，避免平板任务栏或导航栏遮挡 App。
+- 增加 `tools/mqtt-robot-sim.ps1`，可在一个命令行窗口内模拟机器人上报并监听 App 下发。
+
+验证命令：
+
+```powershell
+.\gradlew.bat testDebugUnitTest assembleDebug
+```
+
+## 回退到最初 UI 版本
+
+本次 UI/MQTT 大改前的备份 tag：
+
+```text
+before-first-version-ui
+```
+
+对应提交：
+
+```text
+46a9dde docs: add first version app requirements
+```
+
+回退命令：
+
+```bash
+git fetch --all --tags
+git checkout feature/first-version-app
+git pull origin feature/first-version-app
+git revert --no-edit before-first-version-ui..HEAD
+git push origin feature/first-version-app
+```
+
+如果只是想从最初 UI 版本新建一个恢复分支，不影响当前分支，执行：
+
+```bash
+git fetch --all --tags
+git checkout -b restore-before-first-version-ui before-first-version-ui
+```

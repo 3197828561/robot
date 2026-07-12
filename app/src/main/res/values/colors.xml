@@ -29,4 +29,21 @@
     <color name="joystick_direction_pressed">#455A64</color>
     <color name="joystick_stop_fill">#E64A19</color>
     <color name="joystick_stop_stroke">#BF360C</color>
+
+    <color name="control_page_bg">#F5F7FB</color>
+    <color name="control_top_bar">#17202A</color>
+    <color name="control_bottom_bar">#FFFFFF</color>
+    <color name="control_panel">#FFFFFF</color>
+    <color name="control_stroke">#DDE5EF</color>
+    <color name="control_title">#17202A</color>
+    <color name="control_text">#243447</color>
+    <color name="control_text_muted">#617386</color>
+    <color name="control_on_dark">#FFFFFF</color>
+    <color name="control_on_dark_muted">#A8B3C2</color>
+    <color name="control_primary">#1167F2</color>
+    <color name="control_warning">#FF7A1A</color>
+    <color name="control_danger">#F5222D</color>
+    <color name="control_success">#19B865</color>
+    <color name="control_nav_inactive">#687688</color>
+    <color name="control_legend_bg">#F7FAFF</color>
 </resources>
