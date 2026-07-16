@@ -7,7 +7,7 @@
 - 模拟机器人向 App 上报 `heartbeat` 和 `status`；
 - 监听 App 下发的 `cmd` 和 `remote`；
 - 对 `cmd` 自动返回相同 `cmdId` 的 `cmd_ack`；
-- 在命令行打印 App 下发的内容，方便确认按钮和摇杆是否真的发出了 MQTT 消息。
+- 在命令行打印 App 下发的内容，方便确认方向按钮是否真的发出了 MQTT 消息。
 
 ## 适用范围
 
@@ -105,7 +105,7 @@ Topics: device/<productType>/<deviceId>/*
 [UP] status work=stopped movement=stopped device=normal speed=0/0
 ```
 
-当 App 点击按钮或拖动摇杆时，会打印：
+当 App 点击命令按钮或长按方向按钮时，会打印：
 
 ```text
 [DOWN] device/.../cmd {...}
@@ -179,9 +179,9 @@ App 预期：
 
 点击“解除急停”后，脚本会改回 `stopped/manual/normal`。
 
-### 5. 手动遥控摇杆
+### 5. 手动控制方向按钮
 
-进入“手动遥控”页，按住摇杆超过 0.5 秒并拖动。
+进入“手动控制”页，按住前进、后退、左转或右转按钮超过 0.5 秒。
 
 脚本预期输出多条：
 
@@ -189,7 +189,7 @@ App 预期：
 [DOWN] device/.../remote {"linearSpeedCms":...,"angularSpeedRadps":...,"durationMs":300}
 ```
 
-松开摇杆后，脚本应收到零速度：
+松开方向按钮或点击普通停止后，脚本应收到零速度：
 
 ```text
 [DOWN] device/.../remote {"linearSpeedCms":0,"angularSpeedRadps":0,...}

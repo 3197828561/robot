@@ -19,6 +19,7 @@ import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.repository.AuthRepository
 import com.robot.solar.ui.login.LoginActivity
 import com.robot.solar.ui.main.MainActivity
+import com.robot.solar.ui.common.ProtocolDisplayText
 import com.robot.solar.utils.LogUtils
 import com.robot.solar.viewmodel.DeviceListViewModel
 
@@ -118,8 +119,7 @@ class DeviceListActivity : AppCompatActivity() {
 
             fun bind(item: DeviceDto, onClick: (DeviceDto) -> Unit) {
                 name.text = item.displayName
-                val productType = item.productType?.takeIf { it.isNotBlank() } ?: "--"
-                id.text = "ID: ${item.deviceId}  类型: $productType"
+                id.text = "设备编号：${item.deviceId}  类型：${ProtocolDisplayText.productType(itemView.context, item.productType)}"
                 itemView.setOnClickListener { onClick(item) }
             }
         }

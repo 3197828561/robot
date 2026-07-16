@@ -9,6 +9,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.google.gson.Gson
 import com.robot.solar.BuildConfig
+import com.robot.solar.map.PvMapParser
 import com.robot.solar.utils.LogUtils
 import java.io.File
 import java.security.MessageDigest
@@ -33,12 +34,13 @@ import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
 /**
- * 第一版 APP 与 Robot MQTT 管理：device/{productType}/{deviceId}/{topicType}。
+ * 第二版 APP 与 Robot MQTT 管理：device/{productType}/{deviceId}/{topicType}。
  */
 class CloudCommMqttManager private constructor(private val appContext: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val gson = Gson()
+    private val mapParser = PvMapParser(gson)
     private val httpClient = OkHttpClient()
     private var client: MqttClient? = null
     private var boundDeviceId: String? = null
@@ -73,6 +75,9 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     private val _mapState = MutableLiveData(MapUiState())
     val mapState: LiveData<MapUiState> = _mapState
 
+    private val _pose = MutableLiveData<PoseMessage?>(null)
+    val pose: LiveData<PoseMessage?> = _pose
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             scope.launch { tryConnectIfNeeded("网络恢复") }
@@ -105,6 +110,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         boundDeviceId = deviceId
         boundProductType = productType
         startHeartbeatMonitor()
+        loadLocalDemoMapIfNeeded()
         scope.launch { tryConnectIfNeeded("绑定设备 $productType/$deviceId") }
     }
 
@@ -132,7 +138,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                                     topicHeartbeat(productType, deviceId),
                                     topicStatus(productType, deviceId),
                                     topicCmdAck(productType, deviceId),
-                                    topicMap(productType, deviceId)
+                                    topicMap(productType, deviceId),
+                                    topicPose(productType, deviceId)
                                 )
                             )
                         }
@@ -159,6 +166,43 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         _lastCmdAck.postValue(null)
         _lastCmdFeedback.postValue(null)
         _mapState.postValue(MapUiState())
+        _pose.postValue(null)
+    }
+
+    private fun loadLocalDemoMapIfNeeded() {
+        if (_mapState.value?.status != MapLoadStatus.NO_MAP) return
+        scope.launch {
+            runCatching {
+                appContext.assets.open(LOCAL_DEMO_MAP_ASSET).bufferedReader(Charsets.UTF_8).use { reader ->
+                    mapParser.parse(reader.readText())
+                }
+            }.onSuccess { pvMap ->
+                if (_mapState.value?.status == MapLoadStatus.NO_MAP) {
+                    _mapState.postValue(
+                        MapUiState(
+                            status = MapLoadStatus.READY,
+                            message = "本地测试地图",
+                            map = MapMessage(
+                                version = PROTOCOL_VERSION,
+                                deviceId = boundDeviceId,
+                                productType = boundProductType,
+                                timestamp = null,
+                                mapId = pvMap.mapId,
+                                mapName = "本地复杂示例地图",
+                                mapVersion = pvMap.version,
+                                mapJsonUrl = null,
+                                fileSizeBytes = null,
+                                checksum = null
+                            ),
+                            pvMap = pvMap,
+                            isLocalDemo = true
+                        )
+                    )
+                }
+            }.onFailure {
+                LogUtils.system("本地测试地图加载失败")
+            }
+        }
     }
 
     private suspend fun tryConnectIfNeeded(reason: String) {
@@ -213,7 +257,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                 override fun connectionLost(cause: Throwable?) {
                     _mqttConnected.postValue(false)
                     _deviceOnline.postValue(false)
-                    LogUtils.system("MQTT 断开：${cause?.message ?: "未知"}")
+                    LogUtils.system("设备连接已断开，正在尝试恢复")
                     scheduleReconnect()
                 }
 
@@ -229,7 +273,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             subscribeTopics(mqttClient, productType, deviceId)
         } catch (e: Exception) {
             _mqttConnected.postValue(false)
-            LogUtils.system("MQTT 连接失败：${e.message}")
+            LogUtils.system("设备连接失败，请检查网络")
             scheduleReconnect()
         }
     }
@@ -239,7 +283,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             topicHeartbeat(productType, deviceId),
             topicStatus(productType, deviceId),
             topicCmdAck(productType, deviceId),
-            topicMap(productType, deviceId)
+            topicMap(productType, deviceId),
+            topicPose(productType, deviceId)
         )
         val qos = IntArray(topics.size) { QOS }
         mqttClient.subscribe(topics, qos)
@@ -260,7 +305,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         _lastHeartbeatAt.postValue(now)
                         _deviceOnline.postValue(true)
                     }
-                    LogUtils.device("heartbeat：online=${msg.online}")
+                    LogUtils.device(if (msg.online == true) "收到设备在线心跳" else "收到设备离线通知")
                 }
                 topic.endsWith("/status") -> {
                     val msg = gson.fromJson(payload, StatusMessage::class.java)
@@ -268,15 +313,15 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     msg.batteryPercent?.let {
                             _batteryPercent.postValue(it.toInt().coerceIn(0, 100))
                         }
-                    LogUtils.device("status：battery=${msg.batteryPercent}, work=${msg.workStatus}")
+                    LogUtils.device("设备运行状态已更新")
                 }
                 topic.endsWith("/cmd_ack") -> {
                     val ack = gson.fromJson(payload, CmdAckMessage::class.java)
                     _lastCmdAck.postValue(ack)
                     val text = when (ack.ackStatus) {
-                        "success" -> "指令执行成功：${ack.cmd ?: ""}"
-                        "failed" -> "指令执行失败：${ack.message ?: ack.errorCode ?: ""}"
-                        else -> "指令回执：${ack.ackStatus ?: "未知"}"
+                        "success" -> "设备已确认执行结果"
+                        "failed" -> "设备未能执行操作"
+                        else -> "收到设备操作反馈"
                     }
                     _lastCmdFeedback.postValue(text)
                     LogUtils.device("cmd_ack：$text")
@@ -284,11 +329,16 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                 topic.endsWith("/map") -> {
                     val map = gson.fromJson(payload, MapMessage::class.java)
                     handleMapMessage(map)
-                    LogUtils.device("map：${map.mapId ?: ""} ${map.mapJsonUrl ?: ""}")
+                    LogUtils.device("收到地图更新通知，地图编号：${map.mapId ?: "--"}")
+                }
+                topic.endsWith("/pose") -> {
+                    val pose = gson.fromJson(payload, PoseMessage::class.java)
+                    _pose.postValue(pose)
+                    LogUtils.device("机器人地图位置已更新")
                 }
             }
         } catch (e: Exception) {
-            LogUtils.system("MQTT 消息解析失败：${e.message}")
+            LogUtils.system("收到无法识别的设备消息")
         }
     }
 
@@ -378,9 +428,19 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         return publish(topicRemote(productType, deviceId), json.toString())
     }
 
-    private fun handleMapMessage(map: MapMessage) {
+    fun retryMapDownload() {
+        if (_mapState.value?.isLocalDemo == true) {
+            _mapState.postValue(MapUiState())
+            loadLocalDemoMapIfNeeded()
+            return
+        }
+        val map = _mapState.value?.map ?: return
+        handleMapMessage(map, forceDownload = true)
+    }
+
+    private fun handleMapMessage(map: MapMessage, forceDownload: Boolean = false) {
         val url = map.mapJsonUrl?.takeIf { it.isNotBlank() }
-        val mapId = map.mapId?.takeIf { it.isNotBlank() }
+        val mapId = map.mapId
         val version = map.mapVersion
         if (url == null || mapId == null || version == null) {
             _mapState.postValue(MapUiState(status = MapLoadStatus.NO_MAP, message = "暂无地图", map = map))
@@ -389,43 +449,56 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         mapJob?.cancel()
         mapJob = scope.launch {
             _mapState.postValue(MapUiState(status = MapLoadStatus.DOWNLOADING, message = "正在加载", map = map))
-            val result = runCatching { downloadAndCacheMap(map, url, mapId, version) }
+            val result = runCatching { downloadAndCacheMap(map, url, mapId, version, forceDownload) }
             _mapState.postValue(
                 result.fold(
-                    onSuccess = { path ->
-                        MapUiState(status = MapLoadStatus.READY, message = "地图已加载", map = map, cachePath = path)
+                    onSuccess = { (path, pvMap) ->
+                        MapUiState(status = MapLoadStatus.READY, message = "地图已加载", map = map, cachePath = path, pvMap = pvMap)
                     },
                     onFailure = { error ->
-                        LogUtils.system("地图加载失败：${error.message}")
-                        MapUiState(status = MapLoadStatus.FAILED, message = "地图加载失败", map = map)
+                        LogUtils.system("地图加载失败，请重新加载")
+                        MapUiState(status = MapLoadStatus.FAILED, message = error.message ?: "地图加载失败", map = map)
                     }
                 )
             )
         }
     }
 
-    private fun downloadAndCacheMap(map: MapMessage, url: String, mapId: String, version: Int): String {
+    private fun downloadAndCacheMap(
+        map: MapMessage,
+        url: String,
+        mapId: Long,
+        version: Int,
+        forceDownload: Boolean
+    ): Pair<String, com.robot.solar.map.PvMap> {
         require(url.startsWith("https://") || url.startsWith("http://")) { "mapJsonUrl 不是 HTTP/HTTPS" }
         val cacheDir = File(appContext.cacheDir, "maps").apply { mkdirs() }
         val cacheFile = File(cacheDir, "${mapId}_${version}.json")
+        if (forceDownload) cacheFile.delete()
         if (!cacheFile.exists()) {
             val request = Request.Builder().url(url).build()
             httpClient.newCall(request).execute().use { response ->
                 require(response.isSuccessful) { "HTTP ${response.code}" }
                 val body = response.body?.bytes() ?: error("地图响应为空")
+                require(body.size <= MAX_MAP_BYTES) { "地图文件过大" }
+                map.fileSizeBytes?.let { require(it == body.size.toLong()) { "地图文件大小不匹配" } }
                 verifyChecksumIfNeeded(body, map.checksum)
-                cacheFile.writeBytes(body)
+                val temporary = File(cacheDir, "${mapId}_${version}.tmp")
+                temporary.writeBytes(body)
+                require(temporary.renameTo(cacheFile)) { "地图缓存写入失败" }
             }
         } else {
-            verifyChecksumIfNeeded(cacheFile.readBytes(), map.checksum)
+            try {
+                verifyChecksumIfNeeded(cacheFile.readBytes(), map.checksum)
+            } catch (error: Exception) {
+                cacheFile.delete()
+                throw error
+            }
         }
-        val text = cacheFile.readText(Charsets.UTF_8).trim()
-        if (text.startsWith("[")) {
-            org.json.JSONArray(text)
-        } else {
-            JSONObject(text)
-        }
-        return cacheFile.absolutePath
+        val pvMap = mapParser.parse(cacheFile)
+        require(pvMap.mapId == mapId) { "地图 ID 与通知不一致" }
+        require(pvMap.version == version) { "地图版本与通知不一致" }
+        return cacheFile.absolutePath to pvMap
     }
 
     private fun verifyChecksumIfNeeded(bytes: ByteArray, checksum: String?) {
@@ -448,7 +521,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             mqttClient.publish(topic, message)
             true
         } catch (e: Exception) {
-            LogUtils.system("MQTT 发布失败：${e.message}")
+            LogUtils.system("操作发送失败，请检查设备连接")
             false
         }
     }
@@ -461,12 +534,15 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         private const val PROTOCOL_VERSION = "1.0"
         private const val QOS = 1
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
+        private const val MAX_MAP_BYTES = 20 * 1024 * 1024
+        private const val LOCAL_DEMO_MAP_ASSET = "example_map_complex.json"
         private val SUPPORTED_CMDS = setOf("start", "stop", "estop", "clear_estop")
 
         fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"
         fun topicStatus(productType: String, deviceId: String) = "device/$productType/$deviceId/status"
         fun topicCmdAck(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd_ack"
         fun topicMap(productType: String, deviceId: String) = "device/$productType/$deviceId/map"
+        fun topicPose(productType: String, deviceId: String) = "device/$productType/$deviceId/pose"
         fun topicCmd(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd"
         fun topicRemote(productType: String, deviceId: String) = "device/$productType/$deviceId/remote"
 

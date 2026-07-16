@@ -1,6 +1,6 @@
 package com.robot.solar.network.mqtt
 
-/** 第一版 APP 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
+/** 第二版 APP 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
 data class HeartbeatMessage(
     val version: String?,
     val deviceId: String?,
@@ -21,12 +21,7 @@ data class StatusMessage(
     val angularSpeedRadps: Double?,
     val deviceStatus: String?,
     val movementStatus: String?,
-    val currentBlockId: String?,
-    val currentCellId: String?,
-    val positionX: Double?,
-    val positionY: Double?,
-    val headingDeg: Double?,
-    /** 兼容 UI 展示的可选扩展字段，硬件第一版未强制要求。 */
+    /** 设备状态扩展字段；地图定位统一由 PoseMessage 提供。 */
     val yawDeg: Double?,
     val pitchDeg: Double?,
     val temperatureC: Double?,
@@ -54,12 +49,29 @@ data class MapMessage(
     val deviceId: String?,
     val productType: String?,
     val timestamp: String?,
-    val mapId: String?,
+    val mapId: Long?,
     val mapName: String?,
     val mapVersion: Int?,
     val mapJsonUrl: String?,
-    val fileSizeBytes: Int?,
+    val fileSizeBytes: Long?,
     val checksum: String?
+)
+
+data class PoseMessage(
+    val version: String?,
+    val deviceId: String?,
+    val productType: String?,
+    val timestamp: String?,
+    val mapId: Long?,
+    val mapVersion: Int?,
+    val blockId: Long?,
+    val cellId: Long?,
+    val cellRow: Int?,
+    val cellCol: Int?,
+    val innerRow: Int?,
+    val innerCol: Int?,
+    val headingCode: Int?,
+    val heading: String?
 )
 
 data class DeviceTopicIdentity(
@@ -122,5 +134,7 @@ data class MapUiState(
     val status: MapLoadStatus = MapLoadStatus.NO_MAP,
     val message: String = "暂无地图",
     val map: MapMessage? = null,
-    val cachePath: String? = null
+    val cachePath: String? = null,
+    val pvMap: com.robot.solar.map.PvMap? = null,
+    val isLocalDemo: Boolean = false
 )

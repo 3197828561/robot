@@ -42,6 +42,12 @@
                 tools:text="2026-07-12 00:30:00" />
         </LinearLayout>
 
+        <com.robot.solar.ui.common.BatteryIndicatorView
+            android:id="@+id/batteryIndicator"
+            android:layout_width="88dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="12dp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDeviceList"
             style="?attr/materialButtonOutlinedStyle"
@@ -84,6 +90,11 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:padding="16dp">
+
+                        <com.robot.solar.ui.map.PvMapView
+                            android:id="@+id/mapPreviewView"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent" />
 
                         <LinearLayout
                             android:layout_width="wrap_content"
@@ -341,6 +352,36 @@
                 android:layout_height="520dp"
                 android:background="@color/control_panel">
 
+                <com.robot.solar.ui.map.PvMapView
+                    android:id="@+id/mapPageView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:layout_margin="12dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapReset"
+                        style="?attr/materialButtonTonalStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="显示全部"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapCenter"
+                        style="?attr/materialButtonTonalStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:text="居中机器人"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/tvMapPageState"
                     android:layout_width="wrap_content"
@@ -418,13 +459,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="手动遥控"
+                            android:text="手动控制"
                             android:textColor="@color/control_title"
                             android:textSize="18sp"
                             android:textStyle="bold" />
 
-                        <com.robot.solar.ui.main.JoystickView
-                            android:id="@+id/joystick"
+                        <com.robot.solar.ui.main.DirectionPadView
+                            android:id="@+id/directionPad"
                             android:layout_width="260dp"
                             android:layout_height="260dp"
                             android:layout_marginTop="12dp" />
@@ -434,7 +475,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:text="松开摇杆自动停止"
+                            android:text="长按方向按钮 0.5 秒后开始控制，松开立即停止"
                             android:textColor="@color/control_text_muted"
                             android:textSize="14sp" />
                     </LinearLayout>
@@ -463,6 +504,17 @@
                             android:textColor="@color/control_text"
                             android:textSize="14sp"
                             tools:text="在线状态：--" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnRemoteStop"
+                            android:layout_width="match_parent"
+                            android:layout_height="52dp"
+                            android:layout_marginHorizontal="16dp"
+                            android:layout_marginBottom="10dp"
+                            android:text="普通停止"
+                            android:textSize="17sp"
+                            app:backgroundTint="@color/control_warning"
+                            app:cornerRadius="10dp" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnRemoteEmergency"
@@ -545,7 +597,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="◉  手动遥控"
+            android:text="◉  手动控制"
             android:textColor="@color/control_nav_inactive"
             android:textSize="15sp" />
 

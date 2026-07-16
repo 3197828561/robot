@@ -73,6 +73,7 @@ curl -X POST http://47.103.157.213/api/auth/login \
 | `device/{productType}/{deviceId}/status` | `StatusMessage` | 电量、工作状态、控制模式、速度、设备状态、运动状态 | 主监控页实时刷新 |
 | `device/{productType}/{deviceId}/cmd_ack` | `CmdAckMessage` | `cmd` 指令处理结果 | Toast + 本地日志 |
 | `device/{productType}/{deviceId}/map` | `MapMessage` | 地图文件通知 | 后续地图展示/下载 |
+| `device/{productType}/{deviceId}/pose` | `PoseMessage` | 地图离散位姿与朝向 | 机器人位置和最近 10 秒轨迹 |
 
 App 会先校验：
 
@@ -80,11 +81,14 @@ App 会先校验：
 - `productType == 当前设备类型`
 - `deviceId == 当前设备 ID`
 
+第二版协议中，地图定位不再放入 `status`。`mapId` 为整数并与标准地图 JSON
+的 `map_id` 对齐；`pose.mapId + pose.mapVersion` 必须与当前地图一致后才参与绘制。
+
 ### 4.2 App 下行，设备订阅
 
 | Topic | Payload type | 用途 | App 入口 |
 |-------|--------------|------|----------|
-| `device/{productType}/{deviceId}/remote` | `remote` | 速度型摇杆遥控 | `publishRemote()` |
+| `device/{productType}/{deviceId}/remote` | `remote` | 四向按钮固定速度手动控制 | `publishRemote()` |
 | `device/{productType}/{deviceId}/cmd` | `cmd` | start/stop/estop/clear_estop | `publishCmd()` |
 
 遥控映射：
@@ -93,12 +97,15 @@ App 会先校验：
 |------|------------------------|--------------------------|
 | 前进 | `+20.0` | `0.0` |
 | 后退 | `-20.0` | `0.0` |
-| 左转 | `0.0` | `+0.3` |
-| 右转 | `0.0` | `-0.3` |
+| 左转 | `0.0` | `-0.5` |
+| 右转 | `0.0` | `+0.5` |
 | 停止 | `0.0` | `0.0` |
 | 急停 | 发布 `cmd = "estop"` | - |
 
 `remote` 使用 `durationMs = 300`，硬件侧超过 `1000ms` 未收到新的 `remote` 应自动停车。
+方向按钮按住前 `500ms` 不发送；超过后以 `20Hz` 发送。松开、页面退出、应用进入后台、
+断连、心跳超时、自动运行、急停或设备异常时，App 发送零速度并终止周期发送。多个方向
+按钮同时按下时同样发送零速度，并提示用户不能同时操作。
 
 ## 5. 服务器部署入口
 
