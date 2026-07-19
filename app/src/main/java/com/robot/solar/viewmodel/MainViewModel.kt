@@ -9,6 +9,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.robot.solar.network.mqtt.CloudCommMqttManager
+import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.MapUiState
@@ -71,7 +72,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var commandTimeoutJob: Job? = null
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
-    private val cmdAckObserver = Observer<com.robot.solar.network.mqtt.CmdAckMessage?> { handleCmdAck(it) }
+    private val cmdAckObserver = Observer<CmdAckMessage?> { handleCmdAck(it) }
     private val mqttConnectedObserver = Observer<Boolean> { connected ->
         if (connected != true) {
             stopRemote(sendZero = false)
@@ -99,9 +100,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         remoteJob = viewModelScope.launch(Dispatchers.IO) {
             delay(500)
             while (true) {
-                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) {
-                    break
-                }
+                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) break
                 val active = currentDirection ?: break
                 mqtt.publishRemote(active.linearSpeedCms, active.angularSpeedRadps)
                 delay(50)
@@ -152,7 +151,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun handleCmdAck(ack: com.robot.solar.network.mqtt.CmdAckMessage?) {
+    private fun handleCmdAck(ack: CmdAckMessage?) {
         ack ?: return
         val pending = waitingCmdId
         if (pending != null && ack.cmdId == pending) {
@@ -160,9 +159,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             finishPendingCommand(status, null, null)
         } else {
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            _commandState.postValue(
-                CommandUiState(ack.cmdId, ack.cmd, status)
-            )
+            _commandState.postValue(CommandUiState(ack.cmdId, ack.cmd, status))
         }
     }
 

@@ -35,6 +35,20 @@ class PvMapParserTest {
         assertNull(parser.resolvePose(map, pose))
     }
 
+    @Test
+    fun resolvePose_acceptsHeadingNameWhenCodeIsMissing() {
+        val map = parser.parse(validMap)
+        val pose = PoseMessage(
+            "1.0", "crawler_1", "crawler", null,
+            7, 3, 1, 10, 0, 0, 1, 1, null, "block_v_positive"
+        )
+
+        val position = parser.resolvePose(map, pose)
+
+        assertNotNull(position)
+        assertEquals(180.0, position!!.headingDegrees, 0.001)
+    }
+
     @Test(expected = MapValidationException::class)
     fun parse_rejectsCellInMissingGridPosition() {
         parser.parse(validMap.replace("\"grid\":[[1]]", "\"grid\":[[0]]"))

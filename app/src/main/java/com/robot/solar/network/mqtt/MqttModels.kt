@@ -1,6 +1,6 @@
 package com.robot.solar.network.mqtt
 
-/** 第二版 APP 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
+/** 第二版 App 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
 data class HeartbeatMessage(
     val version: String?,
     val deviceId: String?,

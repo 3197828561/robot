@@ -90,6 +90,14 @@ object ProtocolDisplayText {
         else -> context.getString(R.string.product_type_other)
     }
 
+    fun mapHeading(valueCode: Int?, valueName: String?): String = when (valueCode ?: headingCodeFromName(valueName)) {
+        0 -> "沿板块横向正向"
+        1 -> "沿板块横向反向"
+        2 -> "沿板块纵向正向"
+        3 -> "沿板块纵向反向"
+        else -> "--"
+    }
+
     fun jobStatus(context: Context, value: String?): String = context.getString(
         when (value) {
             "pending", "queued" -> R.string.job_status_pending
@@ -101,4 +109,12 @@ object ProtocolDisplayText {
             else -> R.string.status_unknown
         }
     )
+
+    private fun headingCodeFromName(value: String?): Int? = when (value) {
+        "block_u_positive" -> 0
+        "block_u_negative" -> 1
+        "block_v_positive" -> 2
+        "block_v_negative" -> 3
+        else -> null
+    }
 }

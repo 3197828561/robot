@@ -13,17 +13,18 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.robot.solar.databinding.ActivityMainBinding
+import com.robot.solar.map.MapPosition
+import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.MapLoadStatus
+import com.robot.solar.network.mqtt.MapMessage
 import com.robot.solar.network.mqtt.MapUiState
-import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.network.mqtt.PoseMessage
-import com.robot.solar.map.MapPosition
-import com.robot.solar.map.PvMapParser
+import com.robot.solar.network.mqtt.StatusMessage
+import com.robot.solar.ui.common.ProtocolDisplayText
 import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.log.LogActivity
-import com.robot.solar.ui.common.ProtocolDisplayText
 import com.robot.solar.viewmodel.ControlAvailability
 import com.robot.solar.viewmodel.MainViewModel
 import java.text.SimpleDateFormat
@@ -142,9 +143,7 @@ class MainActivity : AppCompatActivity() {
             binding.directionPad.cancelInput()
             viewModel.ordinaryRemoteStop()
         }
-        binding.btnReloadMap.setOnClickListener {
-            viewModel.retryMapDownload()
-        }
+        binding.btnReloadMap.setOnClickListener { viewModel.retryMapDownload() }
         binding.btnCenterRobot.setOnClickListener {
             if (!binding.mapPageView.centerRobot()) {
                 binding.mapPageView.resetViewport()
@@ -204,6 +203,7 @@ class MainActivity : AppCompatActivity() {
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
                 "当前单元：${currentPose?.cellId ?: "--"}",
+                "机器人朝向：${ProtocolDisplayText.mapHeading(currentPose?.headingCode, currentPose?.heading)}",
                 "最后在线时间：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
             ).joinToString("\n")
         } else {
@@ -222,6 +222,7 @@ class MainActivity : AppCompatActivity() {
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
                 "当前单元：${currentPose?.cellId ?: "--"}",
+                "机器人朝向：${ProtocolDisplayText.mapHeading(currentPose?.headingCode, currentPose?.heading)}",
                 "最后在线时间：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
             ).joinToString("\n")
         }
@@ -249,12 +250,7 @@ class MainActivity : AppCompatActivity() {
             "$source 地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
         }
         binding.tvMapMeta.text = meta
-        binding.tvMapPageMeta.text = buildString {
-            if (mapState.isLocalDemo) append("数据来源：本地测试 JSON\n")
-            append("地图名称：${map?.mapName ?: "--"}\n")
-            append("地图编号：${map?.mapId ?: "--"}\n")
-            append("地图版本：${map?.mapVersion ?: "--"}")
-        }
+        binding.tvMapPageMeta.text = buildMapJsonSummary(mapState, map)
         val readyMap = mapState.pvMap.takeIf { mapState.status == MapLoadStatus.READY }
         binding.mapPreviewView.setMap(readyMap)
         binding.mapPageView.setMap(readyMap)
@@ -279,6 +275,63 @@ class MainActivity : AppCompatActivity() {
         binding.mapPreviewView.setRobot(position, history)
         binding.mapPageView.setRobot(position, history)
         bindStatus(viewModel.status.value)
+    }
+
+    private fun buildMapJsonSummary(mapState: MapUiState, notice: MapMessage?): String {
+        val pvMap = mapState.pvMap
+        return buildString {
+            if (mapState.isLocalDemo) append("数据来源：本地测试 JSON\n")
+            append("通知名称：${notice?.mapName ?: "--"}\n")
+            append("通知编号：${notice?.mapId ?: "--"}\n")
+            append("通知版本：${notice?.mapVersion ?: "--"}")
+            if (pvMap == null) return@buildString
+            append("\nJSON map_id：${pvMap.mapId}")
+            append("\nJSON version：${pvMap.version}")
+            currentPose?.let { pose ->
+                append("\n机器人位置：B${pose.blockId ?: "--"} / C${pose.cellId ?: "--"} / ${ProtocolDisplayText.mapHeading(pose.headingCode, pose.heading)}")
+            }
+            append("\nsource：${pvMap.source?.type ?: "--"} / ${pvMap.source?.fileName ?: "--"}")
+            pvMap.source?.generatedAt?.let { append(" / $it") }
+            append("\nframe：${pvMap.frame.unit}")
+            pvMap.frame.origin?.let { origin ->
+                append(
+                    String.format(
+                        Locale.getDefault(),
+                        "  lat=%.7f lon=%.7f yaw=%.1f°",
+                        origin.latitudeDeg ?: 0.0,
+                        origin.longitudeDeg ?: 0.0,
+                        origin.yawDeg ?: 0.0
+                    )
+                )
+            }
+            append("\ncell_model：${pvMap.cellModel.innerRows} x ${pvMap.cellModel.innerCols}")
+            append("\nblocks：${pvMap.blocks.size} 个，cells：${pvMap.cells.size} 个，bridges：${pvMap.bridges.size} 个")
+            append("\nblock 明细：")
+            append(
+                pvMap.blocks.joinToString("；") { block ->
+                    "B${block.blockId} ${block.rows}x${block.cols} cell=${block.cellIds.size} cleanable=${block.cleanable}"
+                }
+            )
+            append("\ncell 明细：")
+            append(
+                pvMap.cells.joinToString("；") { cell ->
+                    "C${cell.cellId}=B${cell.blockId}[${cell.row},${cell.col}]"
+                }
+            )
+            append("\nbridge 明细：")
+            append(
+                if (pvMap.bridges.isEmpty()) {
+                    "--"
+                } else {
+                    pvMap.bridges.joinToString("；") { bridge ->
+                        val endpoints = bridge.endpoints.joinToString("<->") { endpoint ->
+                            "B${endpoint.blockId}[${endpoint.cellRow},${endpoint.cellCol}] ${endpoint.edge} (${endpoint.innerRow},${endpoint.innerCol})"
+                        }
+                        "BR${bridge.bridgeId} ${bridge.source ?: "--"} $endpoints"
+                    }
+                }
+            )
+        }
     }
 
     private fun bindCommandState(state: CommandUiState) {
@@ -340,7 +393,6 @@ class MainActivity : AppCompatActivity() {
         view.setTextColor(getColor(if (selected) com.robot.solar.R.color.control_primary else com.robot.solar.R.color.control_nav_inactive))
         view.setTypeface(null, if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
     }
-
 }
 
 private enum class Page {

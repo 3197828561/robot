@@ -78,7 +78,7 @@ class PvMapParser(private val gson: Gson = Gson()) {
         val v = (row + 0.5) / map.cellModel.innerRows
         val point = bilinear(points[0], points[1], points[2], points[3], u, v)
         val block = map.blocksById[cell.blockId] ?: return null
-        val axis = when (pose.headingCode) {
+        val axis = when (pose.headingCode ?: headingCodeFromName(pose.heading)) {
             0 -> block.blockFrame.uAxis
             1 -> listOf(-block.blockFrame.uAxis[0], -block.blockFrame.uAxis[1])
             2 -> block.blockFrame.vAxis
@@ -104,6 +104,13 @@ class PvMapParser(private val gson: Gson = Gson()) {
 
     companion object {
         private val EDGES = setOf("u_min", "u_max", "v_min", "v_max")
+        private fun headingCodeFromName(value: String?): Int? = when (value) {
+            "block_u_positive" -> 0
+            "block_u_negative" -> 1
+            "block_v_positive" -> 2
+            "block_v_negative" -> 3
+            else -> null
+        }
     }
 }
 

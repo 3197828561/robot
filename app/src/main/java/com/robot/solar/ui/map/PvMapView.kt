@@ -19,15 +19,15 @@ import kotlin.math.max
 import kotlin.math.min
 
 class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : View(context, attrs) {
-    private val cellFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(36, 92, 145); style = Paint.Style.FILL }
+    private val cellFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(48, 126, 214); style = Paint.Style.FILL }
     private val disabledFill = Paint(cellFill).apply { color = Color.rgb(123, 139, 154) }
-    private val cellStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(196, 220, 240); style = Paint.Style.STROKE; strokeWidth = 1.5f }
+    private val cellStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(235, 244, 255); style = Paint.Style.STROKE; strokeWidth = 2.5f }
     private val bridgeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(130, 255, 154, 55); style = Paint.Style.FILL }
     private val bridgeLine = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.rgb(221, 112, 22); style = Paint.Style.STROKE; strokeWidth = 2f
         pathEffect = DashPathEffect(floatArrayOf(10f, 7f), 0f)
     }
-    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(105, 230, 241, 250); style = Paint.Style.STROKE; strokeWidth = 0.8f }
+    private val gridPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(120, 205, 229, 255); style = Paint.Style.STROKE; strokeWidth = 0.8f }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(22, 45, 67); textSize = 13f * resources.displayMetrics.scaledDensity; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 184, 101); style = Paint.Style.STROKE; strokeWidth = 3f; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val robotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 184, 101); style = Paint.Style.FILL }
@@ -129,7 +129,7 @@ class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : Vi
             val fill = if (current.blocksById[cell.blockId]?.cleanable == false) disabledFill else cellFill
             drawPolygon(canvas, cell.points(), fill)
             drawPolygon(canvas, cell.points(), cellStroke)
-            if (userScale >= 2.2f) drawInnerGrid(canvas, cell.points(), current.cellModel.innerRows, current.cellModel.innerCols)
+            drawInnerGrid(canvas, cell.points(), current.cellModel.innerRows, current.cellModel.innerCols)
         }
         drawTrail(canvas)
         drawRobot(canvas)

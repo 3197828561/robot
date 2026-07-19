@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("auto", "menu", "listen")]
+    [ValidateSet("auto", "menu", "listen", "smoke")]
     [string]$Mode = "auto",
     [string]$MosquittoDir = "C:\Program Files\Mosquitto",
     [string]$LocalProperties = "local.properties",
@@ -9,6 +9,7 @@ param(
     [string]$PasswordOverride = "",
     [string]$ProductTypeOverride = "",
     [string]$DeviceIdOverride = "",
+    [string]$MapJsonUrl = "",
     [switch]$ListenOnly,
     [switch]$MenuOnly,
     [switch]$NoAutoAck
@@ -117,11 +118,6 @@ function Publish-Status {
     $payload["angularSpeedRadps"] = [Math]::Round($Angular, 3)
     $payload["deviceStatus"] = $DeviceStatus
     $payload["movementStatus"] = $MovementStatus
-    $payload["currentBlockId"] = $script:CurrentBlockId
-    $payload["currentCellId"] = $script:CurrentCellId
-    $payload["positionX"] = [Math]::Round($script:PositionX, 2)
-    $payload["positionY"] = [Math]::Round($script:PositionY, 2)
-    $payload["headingDeg"] = [Math]::Round($script:HeadingDeg, 1)
     $payload["yawDeg"] = [Math]::Round($script:HeadingDeg, 1)
     $payload["pitchDeg"] = 3.2
     $payload["temperatureC"] = 36.8
@@ -132,6 +128,22 @@ function Publish-Status {
     $payload["antiFallRightM"] = 0.82
     Invoke-MqttPub "$TopicPrefix/status" (ConvertTo-CompactJson $payload)
     Write-Host "[UP] status work=$WorkStatus movement=$MovementStatus device=$DeviceStatus speed=$Linear/$Angular"
+}
+
+function Publish-Pose {
+    $payload = New-BasePayload
+    $payload["mapId"] = $script:MapId
+    $payload["mapVersion"] = $script:MapVersion
+    $payload["blockId"] = $script:CurrentBlockId
+    $payload["cellId"] = $script:CurrentCellId
+    $payload["cellRow"] = $script:CellRow
+    $payload["cellCol"] = $script:CellCol
+    $payload["innerRow"] = $script:InnerRow
+    $payload["innerCol"] = $script:InnerCol
+    $payload["headingCode"] = $script:HeadingCode
+    $payload["heading"] = $script:HeadingName
+    Invoke-MqttPub "$TopicPrefix/pose" (ConvertTo-CompactJson $payload)
+    Write-Host "[UP] pose map=$script:MapId block=$script:CurrentBlockId cell=$script:CurrentCellId heading=$script:HeadingName"
 }
 
 function Publish-CmdAck {
@@ -154,13 +166,17 @@ function Publish-CmdAck {
 
 function Publish-MapNotice {
     param([string]$Url = "")
+    if ([string]::IsNullOrWhiteSpace($Url)) {
+        Write-Host "[SKIP] map notice because -MapJsonUrl is empty; App can keep the local demo map"
+        return
+    }
     $payload = New-BasePayload
-    $payload["mapId"] = "map_sim_001"
+    $payload["mapId"] = $script:MapId
     $payload["mapName"] = "simulated-map"
-    $payload["mapVersion"] = 1
+    $payload["mapVersion"] = $script:MapVersion
     $payload["mapJsonUrl"] = $Url
-    $payload["fileSizeBytes"] = 0
-    $payload["checksum"] = ""
+    $payload["fileSizeBytes"] = $null
+    $payload["checksum"] = $null
     Invoke-MqttPub "$TopicPrefix/map" (ConvertTo-CompactJson $payload)
     Write-Host "[UP] map notice url='$Url'"
 }
@@ -175,6 +191,8 @@ function Apply-Cmd {
             $script:ControlMode = "auto"
             $script:LinearSpeed = 12
             $script:AngularSpeed = 0
+            $script:HeadingCode = 0
+            $script:HeadingName = "block_u_positive"
         }
         "stop" {
             $script:WorkStatus = "stopped"
@@ -227,6 +245,7 @@ function Handle-DownlinkLine {
                     Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "success" -Message "$cmd accepted by simulator"
                 }
                 Publish-Status
+                Publish-Pose
             } else {
                 if (!$NoAutoAck) {
                     Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "failed" -Message "unsupported cmd" -ErrorCode "SIM_UNSUPPORTED_CMD"
@@ -241,8 +260,17 @@ function Handle-DownlinkLine {
             $script:ControlMode = "manual"
             $script:MovementStatus = if ($moving) { "moving" } else { "stopped" }
             $script:HeadingDeg = ($script:HeadingDeg + $script:AngularSpeed * 8.0) % 360.0
-            $script:PositionX += $script:LinearSpeed / 100.0
+            $script:CellCol = [Math]::Max(0, $script:CellCol + [Math]::Sign($script:LinearSpeed))
+            $script:InnerCol = ($script:InnerCol + 1) % 4
+            if ($script:AngularSpeed -gt 0.01) {
+                $script:HeadingCode = 0
+                $script:HeadingName = "block_u_positive"
+            } elseif ($script:AngularSpeed -lt -0.01) {
+                $script:HeadingCode = 2
+                $script:HeadingName = "block_v_positive"
+            }
             Publish-Status
+            Publish-Pose
         }
     } catch {
         Write-Host "[WARN] failed to parse downlink: $($_.Exception.Message)"
@@ -297,6 +325,42 @@ function Run-ListenOnly {
     exit $LASTEXITCODE
 }
 
+function Run-SmokeOnce {
+    Write-Host "Publishing one MQTT smoke-test sequence for the App main pages."
+    Publish-Heartbeat $true
+    Publish-Status
+    Publish-MapNotice $MapJsonUrl
+    Publish-Pose
+    Start-Sleep -Milliseconds 500
+
+    $script:WorkStatus = "running"; $script:MovementStatus = "moving"; $script:DeviceStatus = "normal"; $script:ControlMode = "auto"; $script:LinearSpeed = 12; $script:AngularSpeed = 0
+    $script:CellCol = 2; $script:InnerCol = 1; $script:HeadingCode = 0; $script:HeadingName = "block_u_positive"
+    Publish-Status
+    Publish-Pose
+    Start-Sleep -Milliseconds 500
+
+    $script:WorkStatus = "stopped"; $script:MovementStatus = "stopped"; $script:DeviceStatus = "normal"; $script:ControlMode = "manual"; $script:LinearSpeed = 0; $script:AngularSpeed = 0
+    $script:CellCol = 3; $script:InnerCol = 2; $script:HeadingCode = 0; $script:HeadingName = "block_u_positive"
+    Publish-Status
+    Publish-Pose
+    Start-Sleep -Milliseconds 500
+
+    $script:WorkStatus = "estopped"; $script:MovementStatus = "stopped"; $script:DeviceStatus = "normal"; $script:ControlMode = "estop"; $script:LinearSpeed = 0; $script:AngularSpeed = 0
+    Publish-Status
+    Publish-Pose
+    Start-Sleep -Milliseconds 500
+
+    $script:WorkStatus = "fault"; $script:MovementStatus = "blocked"; $script:DeviceStatus = "fault"; $script:ControlMode = "auto"; $script:LinearSpeed = 0; $script:AngularSpeed = 0
+    Publish-Status
+    Publish-Pose
+    Start-Sleep -Milliseconds 500
+
+    $script:WorkStatus = "stopped"; $script:MovementStatus = "stopped"; $script:DeviceStatus = "normal"; $script:ControlMode = "manual"; $script:LinearSpeed = 0; $script:AngularSpeed = 0
+    Publish-Status
+    Publish-Pose
+    Write-Host "Smoke sequence complete. Use Mode=auto for interactive command and remote-control testing."
+}
+
 function Run-AutoRobot {
     Write-Host "Auto robot is running. Press Ctrl+C to exit."
     Write-Host "It publishes heartbeat/status and automatically acks App cmd with the same cmdId."
@@ -305,6 +369,8 @@ function Run-AutoRobot {
     try {
         $lastHeartbeat = [DateTime]::MinValue
         $lastStatus = [DateTime]::MinValue
+        $lastMap = [DateTime]::MinValue
+        $lastPose = [DateTime]::MinValue
         while ($true) {
             foreach ($line in Read-NewSubscriberLines) {
                 Handle-DownlinkLine $line
@@ -317,6 +383,14 @@ function Run-AutoRobot {
             if (($now - $lastStatus).TotalMilliseconds -ge 1500) {
                 Publish-Status
                 $lastStatus = $now
+            }
+            if (($now - $lastMap).TotalMilliseconds -ge 10000) {
+                Publish-MapNotice $MapJsonUrl
+                $lastMap = $now
+            }
+            if (($now - $lastPose).TotalMilliseconds -ge 1000) {
+                Publish-Pose
+                $lastPose = $now
             }
             Start-Sleep -Milliseconds 250
         }
@@ -337,7 +411,9 @@ function Run-Menu {
         Write-Host "6. Status: fault"
         Write-Host "7. Ack success by cmdId"
         Write-Host "8. Ack failed by cmdId"
-        Write-Host "9. Map notice without URL"
+        Write-Host "9. Pose update"
+        Write-Host "10. Map notice with -MapJsonUrl"
+        Write-Host "11. Smoke sequence for App main pages"
         Write-Host "0. Exit"
         $choice = Read-Host "Choose"
         switch ($choice) {
@@ -369,7 +445,9 @@ function Run-Menu {
                 $cmd = Read-Host "cmd, e.g. start"
                 Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "failed" -Message "simulated failure" -ErrorCode "SIM_FAIL"
             }
-            "9" { Publish-MapNotice }
+            "9" { Publish-Pose }
+            "10" { Publish-MapNotice $MapJsonUrl }
+            "11" { Run-SmokeOnce }
             "0" { break }
             default { Write-Host "Unknown choice" }
         }
@@ -412,11 +490,17 @@ $script:ControlMode = "manual"
 $script:Battery = 88.0
 $script:LinearSpeed = 0.0
 $script:AngularSpeed = 0.0
-$script:CurrentBlockId = "block-A"
-$script:CurrentCellId = "cell-001"
-$script:PositionX = 1.0
-$script:PositionY = 2.0
+$script:MapId = 2
+$script:MapVersion = 1
+$script:CurrentBlockId = 1
+$script:CurrentCellId = 1
+$script:CellRow = 0
+$script:CellCol = 1
+$script:InnerRow = 0
+$script:InnerCol = 0
 $script:HeadingDeg = 0.0
+$script:HeadingCode = 0
+$script:HeadingName = "block_u_positive"
 
 Write-Host ""
 Write-Host "Robot MQTT simulator"
@@ -430,5 +514,6 @@ Write-Host ""
 switch ($Mode) {
     "listen" { Run-ListenOnly }
     "menu" { Run-Menu }
+    "smoke" { Run-SmokeOnce }
     "auto" { Run-AutoRobot }
 }
