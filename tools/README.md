@@ -2,6 +2,8 @@
 
 本目录维护本地联调工具。当前主要工具是 `mqtt-robot-sim.ps1`，用于在没有真实机器人时模拟机器人侧 MQTT 上行消息，并监听 Android App 下发的控制命令。
 
+如果只需要让 App 判定设备在线，可以运行 `device-online.ps1`。它只持续发布 `heartbeat online=true`，不发布状态、不监听命令、不自动回执。
+
 ## mqtt-robot-sim.ps1
 
 脚本覆盖 App 控制台中和机器人 MQTT 相关的页面内容：
@@ -12,6 +14,22 @@
 - 状态页：工作状态、控制模式、设备状态、电量、速度、地图编号和当前位置。
 
 登录、设备列表、作业记录、固件升级、WiFi 配置走 HTTP 后端接口，不由这个 MQTT 模拟器提供。测试这些页面需要启动云端/本地 HTTP API 服务，并让 App 的 `api.base.url` 指向它。
+
+## device-online.ps1
+
+最小在线模拟脚本，只用于让 App 收到当前设备的在线心跳：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\device-online.ps1
+```
+
+如果 Mosquitto 没有加入 PATH：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\device-online.ps1 -MosquittoDir "C:\Program Files\Mosquitto"
+```
+
+脚本默认读取仓库根目录 `local.properties` 中的 `mqtt.host`、`mqtt.port`、`mqtt.robot.username` / `mqtt.username`、`mqtt.robot.password` / `mqtt.password`、`mqtt.product_type`、`mqtt.default_device_id`。也可以用 `-HostNameOverride`、`-PortOverride`、`-UsernameOverride`、`-PasswordOverride`、`-ProductTypeOverride`、`-DeviceIdOverride` 覆盖。
 
 ## MQTT Topics
 

@@ -138,8 +138,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnEmergency.setOnClickListener { viewModel.sendCmd("紧急停止", "estop") }
         binding.btnClearEstop.setOnClickListener { viewModel.sendCmd("解除急停", "clear_estop") }
         binding.btnRemoteEmergency.setOnClickListener {
-            binding.directionPad.cancelInput()
-            viewModel.ordinaryRemoteStop()
+            binding.directionPad.cancelInput(notifyRelease = false)
+            viewModel.stopRemote(sendZero = false)
             viewModel.sendCmd("紧急停止", "estop")
         }
         binding.btnRemoteStop.setOnClickListener {
@@ -383,7 +383,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnRemoteEmergency.isEnabled = availability.canEstop
         binding.btnClearEstop.isEnabled = availability.canClearEstop
         binding.directionPad.controlsEnabled = availability.canRemote
-        binding.btnRemoteStop.isEnabled = viewModel.mqttConnected.value == true
+        binding.btnRemoteStop.isEnabled = availability.canRemote
         binding.tvRemoteHint.text = if (availability.canRemote) {
             "长按方向按钮 0.5 秒后开始，松开立即停止"
         } else {
@@ -408,15 +408,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun remoteUnavailableReason(): String {
-        val status = viewModel.status.value
         return when {
             viewModel.mqttConnected.value != true -> "MQTT 未连接，手动控制不可用"
             viewModel.deviceOnline.value != true -> "设备离线，手动控制不可用"
-            status == null -> "等待设备状态"
-            status.workStatus == "estopped" -> "设备处于急停状态"
-            status.workStatus != "stopped" -> "请先停止自动运行"
-            status.deviceStatus != "normal" -> "设备状态异常，手动控制不可用"
-            status.controlMode != "manual" -> "设备尚未进入手动模式"
             else -> "当前条件不满足"
         }
     }

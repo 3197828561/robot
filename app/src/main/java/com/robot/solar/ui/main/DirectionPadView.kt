@@ -72,12 +72,12 @@ class DirectionPadView @JvmOverloads constructor(
         return true
     }
 
-    fun cancelInput() {
+    fun cancelInput(notifyRelease: Boolean = true) {
         val hadInput = activeDirection != null || pressedPointers.isNotEmpty()
         pressedPointers.clear()
         activeDirection = null
         conflictReported = false
-        if (hadInput) listener?.onRelease()
+        if (hadInput && notifyRelease) listener?.onRelease()
         invalidate()
     }
 

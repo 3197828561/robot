@@ -43,8 +43,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         fun refresh() {
             value = computeAvailability(
                 mqttConnected.value == true,
-                deviceOnline.value == true,
-                status.value
+                deviceOnline.value == true
             )
         }
         addSource(mqttConnected) { refresh() }
@@ -53,9 +52,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             refresh()
         }
         addSource(status) {
-            if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, it)) {
-                stopRemote(sendZero = true)
-            }
             refresh()
         }
     }
@@ -93,14 +89,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun startRemote(direction: ManualDirection) {
-        if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) return
+        if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) return
         if (remoteJob?.isActive == true && currentDirection == direction) return
         stopRemote(sendZero = remoteJob?.isActive == true)
         currentDirection = direction
         remoteJob = viewModelScope.launch(Dispatchers.IO) {
             delay(500)
             while (true) {
-                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) break
+                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) break
                 val active = currentDirection ?: break
                 mqtt.publishRemote(active.linearSpeedCms, active.angularSpeedRadps)
                 delay(50)
@@ -129,7 +125,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendCmd(label: String, action: String) {
         if (!debounce()) return
-        if (waitingCmdId != null && action != "estop") return
         if (!canSendCommand(action)) return
         viewModelScope.launch(Dispatchers.IO) {
             val result = mqtt.publishCmd(action)
@@ -173,14 +168,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun canSendCommand(action: String): Boolean {
         if (mqttConnected.value != true || deviceOnline.value != true) return false
-        val availability = computeAvailability(true, true, status.value)
-        return when (action) {
-            "start" -> availability.canStart
-            "stop" -> availability.canStop
-            "estop" -> availability.canEstop
-            "clear_estop" -> availability.canClearEstop
-            else -> false
-        }
+        return action in AUTO_COMMANDS
     }
 
     private fun debounce(ms: Long = 400L): Boolean {
@@ -206,31 +194,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun retryMapDownload() = mqtt.retryMapDownload()
 
-    private fun isRemoteAllowed(connected: Boolean, online: Boolean, status: StatusMessage?): Boolean {
-        return ManualControlPolicy.isAllowed(connected, online, status)
+    private fun isRemoteAllowed(connected: Boolean, online: Boolean): Boolean {
+        return ManualControlPolicy.isAllowed(connected, online)
     }
 
     private fun computeAvailability(
         connected: Boolean,
-        online: Boolean,
-        status: StatusMessage?
+        online: Boolean
     ): ControlAvailability {
         if (!connected || !online) return ControlAvailability()
-        val work = status?.workStatus
-        val device = status?.deviceStatus
-        if (device == "fault") return ControlAvailability(canEstop = true)
-        return when (work) {
-            "running" -> ControlAvailability(canStop = true, canEstop = true)
-            "stopped" -> ControlAvailability(
-                canStart = true,
-                canEstop = true,
-                canRemote = device == "normal" && status.controlMode == "manual"
-            )
-            "idle", null -> ControlAvailability(canStart = true, canEstop = true)
-            "estopped" -> ControlAvailability(canClearEstop = true)
-            "fault" -> ControlAvailability(canEstop = true)
-            else -> ControlAvailability(canEstop = true)
-        }
+        return ControlAvailability(
+            canStart = true,
+            canStop = true,
+            canEstop = true,
+            canClearEstop = true,
+            canRemote = isRemoteAllowed(connected, online)
+        )
+    }
+
+    companion object {
+        private val AUTO_COMMANDS = setOf("start", "stop", "estop", "clear_estop")
     }
 }
 
