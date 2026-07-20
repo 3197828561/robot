@@ -135,6 +135,5 @@ data class MapUiState(
     val message: String = "暂无地图",
     val map: MapMessage? = null,
     val cachePath: String? = null,
-    val pvMap: com.robot.solar.map.PvMap? = null,
-    val isLocalDemo: Boolean = false
+    val pvMap: com.robot.solar.map.PvMap? = null
 )

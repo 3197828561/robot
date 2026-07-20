@@ -238,7 +238,7 @@ class MainActivity : AppCompatActivity() {
         val stateText = when (mapState.status) {
             MapLoadStatus.NO_MAP -> "暂无地图"
             MapLoadStatus.DOWNLOADING -> "正在加载"
-            MapLoadStatus.READY -> if (mapState.isLocalDemo) "本地测试地图" else "地图已加载"
+            MapLoadStatus.READY -> "地图已加载"
             MapLoadStatus.FAILED -> "地图加载失败"
         }
         binding.tvMapState.text = stateText
@@ -247,8 +247,7 @@ class MainActivity : AppCompatActivity() {
         val meta = if (map == null) {
             "--"
         } else {
-            val source = if (mapState.isLocalDemo) "【测试数据】" else ""
-            "$source 地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
+            "地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
         }
         binding.tvMapMeta.text = meta
         val readyMap = mapState.pvMap.takeIf { mapState.status == MapLoadStatus.READY }

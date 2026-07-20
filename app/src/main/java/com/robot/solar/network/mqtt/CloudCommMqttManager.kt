@@ -201,44 +201,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         pvMap = pvMap
                     )
                 )
-            } else {
-                loadLocalDemoMapIfNeeded(force = true)
-            }
-        }
-    }
-
-    private fun loadLocalDemoMapIfNeeded(force: Boolean = false) {
-        if (!force && _mapState.value?.status != MapLoadStatus.NO_MAP) return
-        scope.launch {
-            runCatching {
-                appContext.assets.open(LOCAL_DEMO_MAP_ASSET).bufferedReader(Charsets.UTF_8).use { reader ->
-                    mapParser.parse(reader.readText())
-                }
-            }.onSuccess { pvMap ->
-                if (force || _mapState.value?.status == MapLoadStatus.NO_MAP) {
-                    _mapState.postValue(
-                        MapUiState(
-                            status = MapLoadStatus.READY,
-                            message = "本地测试地图",
-                            map = MapMessage(
-                                version = PROTOCOL_VERSION,
-                                deviceId = boundDeviceId,
-                                productType = boundProductType,
-                                timestamp = null,
-                                mapId = pvMap.mapId,
-                                mapName = "本地复杂示例地图",
-                                mapVersion = pvMap.version,
-                                mapJsonUrl = null,
-                                fileSizeBytes = null,
-                                checksum = null
-                            ),
-                            pvMap = pvMap,
-                            isLocalDemo = true
-                        )
-                    )
-                }
-            }.onFailure {
-                LogUtils.system("本地测试地图加载失败")
             }
         }
     }
@@ -460,10 +422,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     }
 
     fun retryMapDownload() {
-        if (_mapState.value?.isLocalDemo == true) {
-            loadLocalDemoMapIfNeeded(force = true)
-            return
-        }
         val map = _mapState.value?.map ?: run {
             loadLatestCachedMapIfNeeded(force = true)
             return
@@ -586,7 +544,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
         private const val MAX_MAP_BYTES = 20 * 1024 * 1024
         private const val MAP_CACHE_DIR = "maps"
-        private const val LOCAL_DEMO_MAP_ASSET = "example_map_complex.json"
         private val SUPPORTED_CMDS = setOf("start", "stop", "estop", "clear_estop")
 
         fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"

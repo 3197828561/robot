@@ -4,6 +4,8 @@
 
 如果只需要让 App 判定设备在线，可以运行 `device-online.ps1`。它只持续发布 `heartbeat online=true`，不发布状态、不监听命令、不自动回执。
 
+如果需要测试地图下载和机器人轨迹，可以运行 `map-pose-path-sim.ps1`。它会发布指定地图 URL 的 `map` 通知，并沿地图内所有 cell 的内部网格生成从一端到另一端的蛇形 `pose` 路径。
+
 ## mqtt-robot-sim.ps1
 
 脚本覆盖 App 控制台中和机器人 MQTT 相关的页面内容：
@@ -30,6 +32,36 @@ powershell -ExecutionPolicy Bypass -File tools\device-online.ps1 -MosquittoDir "
 ```
 
 脚本默认读取仓库根目录 `local.properties` 中的 `mqtt.host`、`mqtt.port`、`mqtt.robot.username` / `mqtt.username`、`mqtt.robot.password` / `mqtt.password`、`mqtt.product_type`、`mqtt.default_device_id`。也可以用 `-HostNameOverride`、`-PortOverride`、`-UsernameOverride`、`-PasswordOverride`、`-ProductTypeOverride`、`-DeviceIdOverride` 覆盖。
+
+## map-pose-path-sim.ps1
+
+地图与轨迹模拟脚本，用于测试 App 地图文件下载、地图渲染、机器人当前位置和最近轨迹：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\map-pose-path-sim.ps1
+```
+
+默认地图 URL：
+
+```text
+http://47.103.157.213/maps/crawler/crawler_00000001/map_2_v1.json
+```
+
+脚本启动后会：
+
+- 下载并解析地图 JSON；
+- 发布 `heartbeat online=true`；
+- 发布 `status stopped/manual/normal`；
+- 每 10 秒发布一次 `map` 通知；
+- 按蛇形路径持续发布 `pose`，默认每 400ms 一个点。
+
+如果 Mosquitto 没有加入 PATH：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\map-pose-path-sim.ps1 -MosquittoDir "C:\Program Files\Mosquitto"
+```
+
+可用 `-PoseIntervalMs` 调整轨迹速度，也可以用 `-MapUrl` 指定其它地图文件。
 
 ## MQTT Topics
 
