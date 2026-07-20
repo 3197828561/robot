@@ -109,7 +109,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         boundDeviceId = deviceId
         boundProductType = productType
         startHeartbeatMonitor()
-        loadLatestCachedMapIfNeeded()
+        loadCurrentCachedMapIfNeeded()
         scope.launch { tryConnectIfNeeded("绑定设备 $productType/$deviceId") }
     }
 
@@ -168,35 +168,30 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         _pose.postValue(null)
     }
 
-    private fun loadLatestCachedMapIfNeeded(force: Boolean = false) {
+    private fun loadCurrentCachedMapIfNeeded(force: Boolean = false) {
         if (!force && _mapState.value?.status != MapLoadStatus.NO_MAP) return
         scope.launch {
             val cached = runCatching {
-                File(appContext.cacheDir, MAP_CACHE_DIR)
-                    .listFiles { file -> file.isFile && file.extension.equals("json", ignoreCase = true) }
-                    .orEmpty()
-                    .mapNotNull { file -> runCatching { file to mapParser.parse(file) }.getOrNull() }
-                    .maxWithOrNull(compareBy<Pair<File, PvMap>> { it.second.version }.thenBy { it.second.mapId })
+                val map = readCurrentMapRecord() ?: return@runCatching null
+                val mapId = map.mapId ?: return@runCatching null
+                val version = map.mapVersion ?: return@runCatching null
+                val file = cacheFileFor(mapId, version)
+                if (!file.exists()) return@runCatching null
+                verifyChecksumIfNeeded(file.readBytes(), map.checksum)
+                val pvMap = mapParser.parse(file)
+                require(pvMap.mapId == mapId) { "地图 ID 与记录不一致" }
+                require(pvMap.version == version) { "地图版本与记录不一致" }
+                map to file to pvMap
             }.getOrNull()
 
             if (cached != null) {
-                val (file, pvMap) = cached
+                val (mapAndFile, pvMap) = cached
+                val (map, file) = mapAndFile
                 _mapState.postValue(
                     MapUiState(
                         status = MapLoadStatus.READY,
-                        message = "已加载本地最新地图",
-                        map = MapMessage(
-                            version = PROTOCOL_VERSION,
-                            deviceId = boundDeviceId,
-                            productType = boundProductType,
-                            timestamp = null,
-                            mapId = pvMap.mapId,
-                            mapName = "本地缓存地图",
-                            mapVersion = pvMap.version,
-                            mapJsonUrl = null,
-                            fileSizeBytes = file.length(),
-                            checksum = null
-                        ),
+                        message = "已加载本地缓存地图",
+                        map = map,
                         cachePath = file.absolutePath,
                         pvMap = pvMap
                     )
@@ -423,11 +418,11 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
     fun retryMapDownload() {
         val map = _mapState.value?.map ?: run {
-            loadLatestCachedMapIfNeeded(force = true)
+            loadCurrentCachedMapIfNeeded(force = true)
             return
         }
         if (map.mapJsonUrl.isNullOrBlank()) {
-            loadLatestCachedMapIfNeeded(force = true)
+            loadCurrentCachedMapIfNeeded(force = true)
             return
         }
         handleMapMessage(map, forceDownload = true)
@@ -440,7 +435,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         if (url == null || mapId == null || version == null) {
             val current = _mapState.value
             if (current?.pvMap == null) {
-                loadLatestCachedMapIfNeeded(force = true)
+                loadCurrentCachedMapIfNeeded(force = true)
             } else {
                 _mapState.postValue(current.copy(message = "未收到有效地图更新，继续显示当前地图"))
             }
@@ -457,6 +452,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             _mapState.postValue(
                 result.fold(
                     onSuccess = { (path, pvMap) ->
+                        saveCurrentMapRecord(map)
                         MapUiState(status = MapLoadStatus.READY, message = "地图已加载", map = map, cachePath = path, pvMap = pvMap)
                     },
                     onFailure = { error ->
@@ -480,8 +476,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         forceDownload: Boolean
     ): Pair<String, PvMap> {
         require(url.startsWith("https://") || url.startsWith("http://")) { "mapJsonUrl 不是 HTTP/HTTPS" }
-        val cacheDir = File(appContext.cacheDir, MAP_CACHE_DIR).apply { mkdirs() }
-        val cacheFile = File(cacheDir, "${mapId}_${version}.json")
+        val cacheFile = cacheFileFor(mapId, version)
         if (forceDownload) cacheFile.delete()
         if (!cacheFile.exists()) {
             val request = Request.Builder().url(url).build()
@@ -491,7 +486,9 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                 require(body.size <= MAX_MAP_BYTES) { "地图文件过大" }
                 map.fileSizeBytes?.let { require(it == body.size.toLong()) { "地图文件大小不匹配" } }
                 verifyChecksumIfNeeded(body, map.checksum)
-                val temporary = File(cacheDir, "${mapId}_${version}.tmp")
+                val parent = cacheFile.parentFile ?: error("地图缓存目录无效")
+                parent.mkdirs()
+                val temporary = File(parent, "${mapId}_${version}.tmp")
                 temporary.writeBytes(body)
                 require(temporary.renameTo(cacheFile)) { "地图缓存写入失败" }
             }
@@ -507,6 +504,33 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         require(pvMap.mapId == mapId) { "地图 ID 与通知不一致" }
         require(pvMap.version == version) { "地图版本与通知不一致" }
         return cacheFile.absolutePath to pvMap
+    }
+
+    private fun cacheFileFor(mapId: Long, version: Int): File {
+        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
+        val deviceId = boundDeviceId ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
+        return File(File(File(appContext.cacheDir, MAP_CACHE_DIR), productType), deviceId)
+            .resolve("${mapId}_${version}.json")
+    }
+
+    private fun currentMapRecordKey(): String {
+        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
+        val deviceId = boundDeviceId ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
+        return "${productType}_${deviceId}"
+    }
+
+    private fun readCurrentMapRecord(): MapMessage? {
+        val prefs = appContext.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
+        val raw = prefs.getString(currentMapRecordKey(), null) ?: return null
+        return runCatching { gson.fromJson(raw, MapMessage::class.java) }.getOrNull()
+    }
+
+    private fun saveCurrentMapRecord(map: MapMessage) {
+        val json = gson.toJson(map.copy(timestamp = null))
+        appContext.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(currentMapRecordKey(), json)
+            .apply()
     }
 
     private fun verifyChecksumIfNeeded(bytes: ByteArray, checksum: String?) {
@@ -544,6 +568,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
         private const val MAX_MAP_BYTES = 20 * 1024 * 1024
         private const val MAP_CACHE_DIR = "maps"
+        private const val MAP_PREFS_NAME = "map_cache"
         private val SUPPORTED_CMDS = setOf("start", "stop", "estop", "clear_estop")
 
         fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"

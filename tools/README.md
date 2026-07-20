@@ -55,6 +55,8 @@ http://47.103.157.213/maps/crawler/crawler_00000001/map_2_v1.json
 - 每 10 秒发布一次 `map` 通知；
 - 按蛇形路径持续发布 `pose`，默认每 400ms 一个点。
 
+App 收到 `map` 通知后会以该通知为当前地图来源。如果本机已缓存相同 `mapId/mapVersion` 的地图，会直接读取缓存；否则按 `mapJsonUrl` 下载并保存。App 不再扫描所有缓存地图猜测最新版，缓存只用于加速当前 Robot 通知地图的展示。
+
 如果 Mosquitto 没有加入 PATH：
 
 ```powershell
