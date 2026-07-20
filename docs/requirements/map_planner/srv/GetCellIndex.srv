@@ -1,0 +1,8 @@
+uint32 map_id
+uint32 cell_id
+---
+bool success
+string message
+uint32 block_id
+int32 cell_row
+int32 cell_col

@@ -1,0 +1,303 @@
+map_id: 1
+version: 1
+source:
+  type: yaml
+  file_name: example_map.yaml
+
+frame:
+  unit: centimeter
+  origin:
+    latitude_deg: 31.1234567
+    longitude_deg: 121.1234567
+    yaw_deg: 12.5
+
+cell_model:
+  inner_rows: 3
+  inner_cols: 6
+
+blocks:
+  - block_id: 1
+    block_frame:
+      block_origin: [0, 0]
+      u_axis: [1.0, 0.0]
+      v_axis: [0.0, 1.0]
+    rows: 2
+    cols: 3
+    grid:
+      - [1, 1, 1]
+      - [1, 1, 0]
+    cell_ids: [1, 2, 3, 4, 5]
+    cleanable: true
+
+  - block_id: 2
+    block_frame:
+      block_origin: [800, 0]
+      u_axis: [1.0, 0.0]
+      v_axis: [0.0, 1.0]
+    rows: 2
+    cols: 2
+    grid:
+      - [1, 1]
+      - [1, 1]
+    cell_ids: [6, 7, 8, 15]
+    cleanable: true
+
+  - block_id: 3
+    block_frame:
+      block_origin: [260, 420]
+      u_axis: [0.866025, 0.5]
+      v_axis: [-0.5, 0.866025]
+    rows: 2
+    cols: 2
+    grid:
+      - [1, 1]
+      - [0, 1]
+    cell_ids: [9, 10, 11]
+    cleanable: true
+
+  - block_id: 4
+    block_frame:
+      block_origin: [760, 520]
+      u_axis: [1.0, 0.0]
+      v_axis: [0.0, 1.0]
+    rows: 2
+    cols: 2
+    grid:
+      - [1, 1]
+      - [1, 1]
+    cell_ids: [12, 16, 13, 14]
+    cleanable: true
+
+bridges:
+  - bridge_id: 1
+    source: cad
+    endpoints:
+      - block_id: 1
+        cell_row: 0
+        cell_col: 2
+        edge: u_max
+        inner_row: 1
+        inner_col: 5
+      - block_id: 2
+        cell_row: 0
+        cell_col: 0
+        edge: u_min
+        inner_row: 1
+        inner_col: 0
+    centerline:
+      - [664, 55]
+      - [800, 55]
+    polygon:
+      - [664, 15]
+      - [800, 15]
+      - [800, 95]
+      - [664, 95]
+
+  - bridge_id: 2
+    source: manual
+    endpoints:
+      - block_id: 3
+        cell_row: 0
+        cell_col: 1
+        edge: u_max
+        inner_row: 1
+        inner_col: 5
+      - block_id: 4
+        cell_row: 1
+        cell_col: 0
+        edge: u_min
+        inner_row: 1
+        inner_col: 0
+    centerline:
+      - [615.3, 688.65]
+      - [760.0, 687.0]
+    polygon:
+      - [595.3059, 723.2944]
+      - [760.0, 721.4164]
+      - [760.0, 652.5836]
+      - [635.2941, 654.0056]
+
+  - bridge_id: 3
+    source: manual
+    endpoints:
+      - block_id: 2
+        cell_row: 1
+        cell_col: 0
+        edge: v_max
+        inner_row: 2
+        inner_col: 2
+      - block_id: 4
+        cell_row: 0
+        cell_col: 0
+        edge: v_min
+        inner_row: 0
+        inner_col: 2
+    centerline:
+      - [891.7, 222.0]
+      - [851.7, 520.0]
+    polygon:
+      - [851.7, 222.0]
+      - [811.7, 520.0]
+      - [891.7, 520.0]
+      - [931.7, 222.0]
+
+cells:
+  - cell_id: 1
+    block_id: 1
+    row: 0
+    col: 0
+    polygon:
+      - [0, 0]
+      - [220, 0]
+      - [220, 110]
+      - [0, 110]
+
+  - cell_id: 2
+    block_id: 1
+    row: 0
+    col: 1
+    polygon:
+      - [222, 0]
+      - [442, 0]
+      - [442, 110]
+      - [222, 110]
+
+  - cell_id: 3
+    block_id: 1
+    row: 0
+    col: 2
+    polygon:
+      - [444, 0]
+      - [664, 0]
+      - [664, 110]
+      - [444, 110]
+
+  - cell_id: 4
+    block_id: 1
+    row: 1
+    col: 0
+    polygon:
+      - [0, 112]
+      - [220, 112]
+      - [220, 222]
+      - [0, 222]
+
+  - cell_id: 5
+    block_id: 1
+    row: 1
+    col: 1
+    polygon:
+      - [222, 112]
+      - [442, 112]
+      - [442, 222]
+      - [222, 222]
+
+  - cell_id: 6
+    block_id: 2
+    row: 0
+    col: 0
+    polygon:
+      - [800, 0]
+      - [1020, 0]
+      - [1020, 110]
+      - [800, 110]
+
+  - cell_id: 7
+    block_id: 2
+    row: 0
+    col: 1
+    polygon:
+      - [1022, 0]
+      - [1242, 0]
+      - [1242, 110]
+      - [1022, 110]
+
+  - cell_id: 8
+    block_id: 2
+    row: 1
+    col: 0
+    polygon:
+      - [800, 112]
+      - [1020, 112]
+      - [1020, 222]
+      - [800, 222]
+
+  - cell_id: 15
+    block_id: 2
+    row: 1
+    col: 1
+    polygon:
+      - [1022, 112]
+      - [1242, 112]
+      - [1242, 222]
+      - [1022, 222]
+
+  - cell_id: 9
+    block_id: 3
+    row: 0
+    col: 0
+    polygon:
+      - [260.0, 420.0]
+      - [450.5, 530.0]
+      - [395.5, 625.3]
+      - [205.0, 515.3]
+
+  - cell_id: 10
+    block_id: 3
+    row: 0
+    col: 1
+    polygon:
+      - [452.3, 531.0]
+      - [642.8, 641.0]
+      - [587.8, 736.3]
+      - [397.3, 626.3]
+
+  - cell_id: 11
+    block_id: 3
+    row: 1
+    col: 1
+    polygon:
+      - [396.3, 628.0]
+      - [586.8, 738.0]
+      - [531.8, 833.3]
+      - [341.3, 723.3]
+
+  - cell_id: 12
+    block_id: 4
+    row: 0
+    col: 0
+    polygon:
+      - [760, 520]
+      - [980, 520]
+      - [980, 630]
+      - [760, 630]
+
+  - cell_id: 16
+    block_id: 4
+    row: 0
+    col: 1
+    polygon:
+      - [982, 520]
+      - [1202, 520]
+      - [1202, 630]
+      - [982, 630]
+
+  - cell_id: 13
+    block_id: 4
+    row: 1
+    col: 0
+    polygon:
+      - [760, 632]
+      - [980, 632]
+      - [980, 742]
+      - [760, 742]
+
+  - cell_id: 14
+    block_id: 4
+    row: 1
+    col: 1
+    polygon:
+      - [982, 632]
+      - [1202, 632]
+      - [1202, 742]
+      - [982, 742]

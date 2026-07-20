@@ -1,0 +1,28 @@
+uint32 map_id
+uint32 map_version
+
+uint32 start_block_id
+int32 start_cell_row
+int32 start_cell_col
+int32 start_inner_row
+int32 start_inner_col
+uint8 start_heading
+
+uint32[] target_block_ids
+bool global_plan
+
+float64 robot_length_cm
+float64 front_roller_width_cm
+float64 rear_roller_width_cm
+float64 robot_width_cm
+float64 safety_margin_cm
+float64 cleaning_width_cm
+float64 overlap_ratio
+bool enable_tail_coverage
+
+string planning_search_effort
+bool debug_score_breakdown
+---
+bool success
+string message
+PlannedPath path
