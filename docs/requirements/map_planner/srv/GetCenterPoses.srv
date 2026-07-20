@@ -1,0 +1,18 @@
+uint32 map_id
+uint32 map_version
+
+uint32[] block_ids
+uint8[] headings
+bool free_only
+
+float64 robot_length_cm
+float64 front_roller_width_cm
+float64 rear_roller_width_cm
+float64 robot_width_cm
+float64 safety_margin_cm
+---
+bool success
+string message
+uint32 map_id
+uint32 map_version
+map_planner/CenterPoseStatus[] poses

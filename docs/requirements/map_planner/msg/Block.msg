@@ -1,0 +1,12 @@
+uint32 block_id
+uint32 rows
+uint32 cols
+int32[] grid_flat
+uint32[] cell_ids
+bool cleanable
+float64 origin_u_cm
+float64 origin_v_cm
+float64 u_axis_x
+float64 u_axis_y
+float64 v_axis_x
+float64 v_axis_y
