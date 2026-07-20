@@ -36,7 +36,7 @@ class FirmwareActivity : AppCompatActivity() {
                 binding.tvNotes.text = meta.releaseNotes ?: "暂无说明"
             } catch (e: Exception) {
                 binding.tvVersion.text = "版本：加载失败"
-                Toast.makeText(this@FirmwareActivity, e.message, Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@FirmwareActivity, getString(com.robot.solar.R.string.error_load_failed), Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -44,7 +44,7 @@ class FirmwareActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     val resp = repo.upgrade(deviceId, null)
-                    Toast.makeText(this@FirmwareActivity, resp.message, Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@FirmwareActivity, getString(com.robot.solar.R.string.firmware_upgrade_submitted), Toast.LENGTH_LONG).show()
                 } catch (e: Exception) {
                     Toast.makeText(this@FirmwareActivity, "升级请求失败", Toast.LENGTH_SHORT).show()
                 }

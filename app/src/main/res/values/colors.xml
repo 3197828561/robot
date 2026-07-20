@@ -22,13 +22,8 @@
     <color name="motion_on_primary">@color/solar_on_primary</color>
     <color name="monitor_accent_line">#00BCD4</color>
 
-    <!-- 官方遥控摇杆面板 -->
-    <color name="joystick_chassis_fill">#1B2838</color>
-    <color name="joystick_chassis_stroke">#3D5366</color>
-    <color name="joystick_direction_fill">#5C6B7A</color>
-    <color name="joystick_direction_pressed">#455A64</color>
-    <color name="joystick_stop_fill">#E64A19</color>
-    <color name="joystick_stop_stroke">#BF360C</color>
+    <!-- 第二版四向手动控制面板 -->
+    <color name="manual_direction_fill">#5C6B7A</color>
 
     <color name="control_page_bg">#F5F7FB</color>
     <color name="control_top_bar">#17202A</color>

@@ -58,6 +58,11 @@ android {
         viewBinding = true
         buildConfig = true
     }
+    sourceSets {
+        getByName("main").assets.srcDir(
+            rootProject.file("docs/requirements/map_planner/config")
+        )
+    }
 }
 
 dependencies {

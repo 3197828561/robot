@@ -41,6 +41,12 @@
                 tools:text="2026-07-12 00:30:00" />
         </LinearLayout>
 
+        <com.robot.solar.ui.common.BatteryIndicatorView
+            android:id="@+id/batteryIndicator"
+            android:layout_width="88dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="12dp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnDeviceList"
             style="?attr/materialButtonOutlinedStyle"
@@ -62,20 +68,20 @@
             android:id="@+id/sectionHome"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:baselineAligned="false"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:padding="10dp">
 
             <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1.35"
-                android:orientation="vertical">
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:baselineAligned="false"
+                android:orientation="horizontal">
 
                 <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1.35"
                     app:cardBackgroundColor="@color/control_panel"
                     app:cardCornerRadius="10dp"
                     app:strokeColor="@color/control_stroke"
@@ -86,6 +92,11 @@
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
                         android:padding="14dp">
+
+                        <com.robot.solar.ui.map.PvMapView
+                            android:id="@+id/mapPreviewView"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent" />
 
                         <LinearLayout
                             android:layout_width="wrap_content"
@@ -141,46 +152,10 @@
                     </FrameLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_marginTop="10dp"
-                    android:layout_weight="0.52"
-                    app:cardBackgroundColor="@color/control_panel"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/control_stroke"
-                    app:strokeWidth="1dp">
-
-                    <TextView
-                        android:id="@+id/tvHomeStatusSummary"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:lineSpacingExtra="2dp"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="10dp"
-                        android:textColor="@color/control_text"
-                        android:textSize="13sp"
-                        tools:text="工作状态：--" />
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginStart="10dp"
-                android:layout_weight="1"
-                android:orientation="vertical">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="1"
-                    android:baselineAligned="false"
-                    android:orientation="horizontal">
-
                     <com.google.android.material.card.MaterialCardView
                         android:layout_width="0dp"
                         android:layout_height="match_parent"
+                        android:layout_marginStart="10dp"
                         android:layout_weight="1"
                         app:cardBackgroundColor="@color/control_panel"
                         app:cardCornerRadius="10dp"
@@ -202,49 +177,82 @@
                                 android:textStyle="bold" />
 
                             <TextView
-                                android:id="@+id/tvDeviceId"
+                                android:id="@+id/tvHomeOnline"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="12dp"
-                                android:text="设备编号：--"
+                                android:text="在线状态：--"
                                 android:textColor="@color/control_text"
                                 android:textSize="14sp" />
 
                             <TextView
-                                android:id="@+id/tvProductType"
+                                android:id="@+id/tvHomeWorkStatus"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="7dp"
-                                android:text="设备类型：--"
+                                android:text="工作状态：--"
                                 android:textColor="@color/control_text_muted"
                                 android:textSize="14sp" />
 
                             <TextView
-                                android:id="@+id/tvMqttStatus"
+                                android:id="@+id/tvHomeControlMode"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="7dp"
-                                android:text="MQTT：未连接"
+                                android:text="控制模式：--"
                                 android:textColor="@color/control_text_muted"
                                 android:textSize="14sp" />
 
                             <TextView
-                                android:id="@+id/tvDeviceOnline"
+                                android:id="@+id/tvHomeBattery"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="7dp"
-                                android:text="在线状态：--"
+                                android:text="电量：--"
                                 android:textColor="@color/control_text_muted"
                                 android:textSize="14sp" />
 
                             <TextView
-                                android:id="@+id/tvLastHeartbeat"
+                                android:id="@+id/tvHomeLinearSpeed"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="7dp"
-                                android:text="最后在线时间：--"
+                                android:text="线速度：--"
                                 android:textColor="@color/control_text_muted"
                                 android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/tvHomeAngularSpeed"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="7dp"
+                                android:text="角速度：--"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/tvHomeDeviceStatus"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="7dp"
+                                android:text="设备状态：--"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="14sp" />
+
+                            <TextView
+                                android:id="@+id/tvHomeMovementStatus"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="7dp"
+                                android:text="运动状态：--"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="14sp" />
+
+                            <TextView android:id="@+id/tvDeviceId" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
+                            <TextView android:id="@+id/tvProductType" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
+                            <TextView android:id="@+id/tvMqttStatus" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
+                            <TextView android:id="@+id/tvDeviceOnline" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
+                            <TextView android:id="@+id/tvLastHeartbeat" android:layout_width="1dp" android:layout_height="1dp" android:visibility="gone" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -311,55 +319,118 @@
                                 android:layout_marginTop="8dp"
                                 android:text="解除急停"
                                 app:cornerRadius="8dp" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="10dp"
+                                android:background="@color/control_legend_bg"
+                                android:padding="10dp"
+                                android:text="自动运行期间机器人将按照任务自主规划路线执行作业。"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="12sp" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
-                </LinearLayout>
+            </LinearLayout>
 
-                <com.google.android.material.card.MaterialCardView
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_marginTop="10dp"
+                android:layout_weight="0.62"
+                app:cardBackgroundColor="@color/control_panel"
+                app:cardCornerRadius="10dp"
+                app:strokeColor="@color/control_stroke"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_marginTop="10dp"
-                    android:layout_weight="0.52"
-                    app:cardBackgroundColor="@color/control_panel"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/control_stroke"
-                    app:strokeWidth="1dp">
+                    android:layout_height="match_parent"
+                    android:orientation="vertical"
+                    android:padding="14dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:orientation="vertical"
-                        android:padding="14dp">
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
 
                         <TextView
-                            android:layout_width="match_parent"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:text="最近命令记录"
                             android:textColor="@color/control_title"
                             android:textSize="17sp"
                             android:textStyle="bold" />
 
-                        <TextView
-                            android:id="@+id/tvCommandState"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="8dp"
-                            android:text="-- / -- / --"
-                            android:textColor="@color/control_text_muted"
-                            android:textSize="14sp" />
-
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnViewLogs"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="match_parent"
-                            android:layout_height="40dp"
-                            android:layout_marginTop="8dp"
-                            android:text="@string/view_logs"
-                            android:textSize="14sp"
-                            app:cornerRadius="8dp" />
+                            style="?attr/borderlessButtonStyle"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="查看更多日志"
+                            android:textColor="@color/control_primary"
+                            android:textSize="13sp" />
                     </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:background="@color/control_page_bg"
+                        android:padding="8dp"
+                        android:text="时间                         命令                         参数                         状态                         说明"
+                        android:textColor="@color/control_text_muted"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvCommandRow1"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="8dp"
+                        android:text="--    --    --    --    --"
+                        android:textColor="@color/control_text"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvCommandRow2"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="8dp"
+                        android:text="--    --    --    --    --"
+                        android:textColor="@color/control_text"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvCommandRow3"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="8dp"
+                        android:text="--    --    --    --    --"
+                        android:textColor="@color/control_text"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvCommandRow4"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:padding="8dp"
+                        android:text="--    --    --    --    --"
+                        android:textColor="@color/control_text"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/tvCommandState"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="最近操作：-- · --"
+                        android:textColor="@color/control_text_muted"
+                        android:textSize="12sp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
         <FrameLayout
@@ -373,7 +444,36 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@color/control_panel"
-                android:padding="16dp">
+                android:padding="12dp">
+
+                <com.robot.solar.ui.map.PvMapView
+                    android:id="@+id/mapPageView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="top|end"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapReset"
+                        style="?attr/materialButtonTonalStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:text="显示全部"
+                        android:textSize="12sp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapCenter"
+                        style="?attr/materialButtonTonalStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:text="居中机器人"
+                        android:textSize="12sp" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvMapPageState"
@@ -385,16 +485,108 @@
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
-                <TextView
-                    android:id="@+id/tvMapPageMeta"
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_gravity="bottom|start"
+                    android:layout_margin="16dp"
                     android:background="@color/control_legend_bg"
-                    android:padding="12dp"
-                    android:text="地图版本：--"
-                    android:textColor="@color/control_text_muted"
-                    android:textSize="13sp" />
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="图例"
+                        android:textColor="@color/control_title"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="● 机器人位置"
+                        android:textColor="@color/control_success"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="- - - 运行轨迹（10s）"
+                        android:textColor="@color/control_success"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="◢ 航向方向"
+                        android:textColor="@color/control_success"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/tvMapPageMeta"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:text="■ 光伏板区域"
+                        android:textColor="@color/control_primary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:id="@+id/tvMapBridgeLegend"
+                        android:text="■ 板间桥接区域"
+                        android:textColor="@color/control_warning"
+                        android:textSize="13sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="48dp"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="16dp"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapZoomIn"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:minWidth="0dp"
+                        android:padding="0dp"
+                        android:text="+"
+                        android:textSize="28sp"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapZoomOut"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="4dp"
+                        android:minWidth="0dp"
+                        android:padding="0dp"
+                        android:text="-"
+                        android:textSize="28sp"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMapLocate"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="4dp"
+                        android:minWidth="0dp"
+                        android:padding="0dp"
+                        android:text="◎"
+                        android:textSize="24sp"
+                        app:cornerRadius="8dp" />
+                </LinearLayout>
             </FrameLayout>
         </FrameLayout>
 
@@ -423,8 +615,16 @@
                     android:orientation="vertical"
                     android:padding="20dp">
 
-                    <com.robot.solar.ui.main.JoystickView
-                        android:id="@+id/joystick"
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="手动控制"
+                        android:textColor="@color/control_title"
+                        android:textSize="18sp"
+                        android:textStyle="bold" />
+
+                    <com.robot.solar.ui.main.DirectionPadView
+                        android:id="@+id/directionPad"
                         android:layout_width="300dp"
                         android:layout_height="300dp" />
 
@@ -433,7 +633,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="16dp"
-                        android:text="松开摇杆自动停止"
+                        android:text="长按方向按钮 0.5 秒后开始控制，松开立即停止"
                         android:textColor="@color/control_text_muted"
                         android:textSize="15sp" />
                 </LinearLayout>
@@ -473,6 +673,16 @@
                         android:textColor="@color/control_text"
                         android:textSize="15sp"
                         tools:text="在线状态：--" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRemoteStop"
+                        android:layout_width="match_parent"
+                        android:layout_height="56dp"
+                        android:layout_marginBottom="10dp"
+                        android:text="普通停止"
+                        android:textSize="18sp"
+                        app:backgroundTint="@color/control_warning"
+                        app:cornerRadius="10dp" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRemoteEmergency"
@@ -551,7 +761,7 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="◉  手动遥控"
+            android:text="◉  手动控制"
             android:textColor="@color/control_nav_inactive"
             android:textSize="15sp" />
 

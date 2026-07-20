@@ -34,7 +34,7 @@ class WifiActivity : AppCompatActivity() {
                 val cfg = repo.get(deviceId)
                 binding.etSsid.setText(cfg.ssid.orEmpty())
             } catch (e: Exception) {
-                Toast.makeText(this@WifiActivity, "读取失败：${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@WifiActivity, getString(com.robot.solar.R.string.error_read_failed), Toast.LENGTH_SHORT).show()
             }
         }
 

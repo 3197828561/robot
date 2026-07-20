@@ -9,11 +9,14 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
 import com.robot.solar.network.mqtt.CloudCommMqttManager
+import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.MapUiState
+import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.repository.DeviceRepository
+import com.robot.solar.ui.main.ManualDirection
 import com.robot.solar.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,6 +34,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val status: LiveData<StatusMessage?> = mqtt.status
     val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
     val mapState: LiveData<MapUiState> = mqtt.mapState
+    val pose: LiveData<PoseMessage?> = mqtt.pose
 
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
@@ -67,9 +71,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var waitingCmdId: String? = null
     private var commandTimeoutJob: Job? = null
     private var remoteJob: Job? = null
-    private var currentRemoteLinear: Double = 0.0
-    private var currentRemoteAngular: Double = 0.0
-    private val cmdAckObserver = Observer<com.robot.solar.network.mqtt.CmdAckMessage?> { handleCmdAck(it) }
+    private var currentDirection: ManualDirection? = null
+    private val cmdAckObserver = Observer<CmdAckMessage?> { handleCmdAck(it) }
     private val mqttConnectedObserver = Observer<Boolean> { connected ->
         if (connected != true) {
             stopRemote(sendZero = false)
@@ -89,36 +92,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mqtt.start(identity.deviceId, identity.productType)
     }
 
-    fun startRemote(linear: Double, angular: Double) {
+    fun startRemote(direction: ManualDirection) {
         if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) return
-        currentRemoteLinear = linear.coerceIn(-20.0, 20.0)
-        currentRemoteAngular = angular.coerceIn(-0.5, 0.5)
-        if (remoteJob?.isActive == true) return
+        if (remoteJob?.isActive == true && currentDirection == direction) return
+        stopRemote(sendZero = remoteJob?.isActive == true)
+        currentDirection = direction
         remoteJob = viewModelScope.launch(Dispatchers.IO) {
             delay(500)
             while (true) {
-                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) {
-                    break
-                }
-                mqtt.publishRemote(currentRemoteLinear, currentRemoteAngular)
+                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) break
+                val active = currentDirection ?: break
+                mqtt.publishRemote(active.linearSpeedCms, active.angularSpeedRadps)
                 delay(50)
             }
             mqtt.publishRemote(0.0, 0.0)
         }
     }
 
-    fun updateRemote(linear: Double, angular: Double) {
-        currentRemoteLinear = linear.coerceIn(-20.0, 20.0)
-        currentRemoteAngular = angular.coerceIn(-0.5, 0.5)
-    }
-
     fun stopRemote(sendZero: Boolean = true) {
         val wasActive = remoteJob?.isActive == true
         remoteJob?.cancel()
         remoteJob = null
-        currentRemoteLinear = 0.0
-        currentRemoteAngular = 0.0
+        currentDirection = null
         if (sendZero && wasActive && mqttConnected.value == true) {
+            viewModelScope.launch(Dispatchers.IO) { mqtt.publishRemote(0.0, 0.0) }
+        }
+    }
+
+    fun ordinaryRemoteStop() {
+        val hadActiveControl = remoteJob?.isActive == true
+        stopRemote(sendZero = false)
+        if (mqttConnected.value == true && (hadActiveControl || deviceOnline.value == true)) {
             viewModelScope.launch(Dispatchers.IO) { mqtt.publishRemote(0.0, 0.0) }
         }
     }
@@ -139,7 +143,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         finishPendingCommand(CommandStatus.TIMEOUT, "$label 回执超时", null)
                     }
                 }
-                LogUtils.device("命令：$label ($action) cmdId=${result.cmdId}")
+                LogUtils.device("已发送操作：$label")
             } else {
                 _commandState.postValue(CommandUiState(null, action, CommandStatus.FAILED, "$label 发送失败"))
                 LogUtils.device("命令失败：$label")
@@ -147,17 +151,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun handleCmdAck(ack: com.robot.solar.network.mqtt.CmdAckMessage?) {
+    private fun handleCmdAck(ack: CmdAckMessage?) {
         ack ?: return
         val pending = waitingCmdId
         if (pending != null && ack.cmdId == pending) {
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            finishPendingCommand(status, ack.message ?: ack.ackStatus, ack.errorCode)
+            finishPendingCommand(status, null, null)
         } else {
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            _commandState.postValue(
-                CommandUiState(ack.cmdId, ack.cmd, status, ack.message ?: ack.ackStatus, ack.errorCode)
-            )
+            _commandState.postValue(CommandUiState(ack.cmdId, ack.cmd, status))
         }
     }
 
@@ -202,13 +204,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mqtt.shutdown()
     }
 
+    fun retryMapDownload() = mqtt.retryMapDownload()
+
     private fun isRemoteAllowed(connected: Boolean, online: Boolean, status: StatusMessage?): Boolean {
-        val current = status ?: return false
-        return connected &&
-            online &&
-            current.workStatus == "stopped" &&
-            current.deviceStatus == "normal"
-        // TODO: if Robot requires controlMode=manual, add it after protocol confirmation.
+        return ManualControlPolicy.isAllowed(connected, online, status)
     }
 
     private fun computeAvailability(
@@ -222,7 +221,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (device == "fault") return ControlAvailability(canEstop = true)
         return when (work) {
             "running" -> ControlAvailability(canStop = true, canEstop = true)
-            "stopped", "idle", null -> ControlAvailability(canStart = true, canEstop = true, canRemote = device == "normal")
+            "stopped" -> ControlAvailability(
+                canStart = true,
+                canEstop = true,
+                canRemote = device == "normal" && status.controlMode == "manual"
+            )
+            "idle", null -> ControlAvailability(canStart = true, canEstop = true)
             "estopped" -> ControlAvailability(canClearEstop = true)
             "fault" -> ControlAvailability(canEstop = true)
             else -> ControlAvailability(canEstop = true)

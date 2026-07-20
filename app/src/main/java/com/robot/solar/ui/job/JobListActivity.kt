@@ -15,6 +15,7 @@ import com.robot.solar.databinding.ActivityJobListBinding
 import com.robot.solar.network.http.dto.JobDto
 import com.robot.solar.repository.DeviceRepository
 import com.robot.solar.repository.JobRepository
+import com.robot.solar.ui.common.ProtocolDisplayText
 import kotlinx.coroutines.launch
 
 class JobListActivity : AppCompatActivity() {
@@ -44,7 +45,7 @@ class JobListActivity : AppCompatActivity() {
                 adapter.submit(jobs)
                 binding.tvEmpty.isVisible = jobs.isEmpty()
             } catch (e: Exception) {
-                Toast.makeText(this@JobListActivity, "加载失败：${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@JobListActivity, getString(com.robot.solar.R.string.error_load_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -72,7 +73,7 @@ class JobListActivity : AppCompatActivity() {
 
             fun bind(item: JobDto) {
                 time.text = item.startedAt
-                detail.text = "状态：${item.status} · 清洁 ${item.cleanedRows} 行"
+                detail.text = "状态：${ProtocolDisplayText.jobStatus(itemView.context, item.status)} · 清洁 ${item.cleanedRows} 行"
             }
         }
     }
