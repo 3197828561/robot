@@ -18,7 +18,6 @@ import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.MapLoadStatus
-import com.robot.solar.network.mqtt.MapMessage
 import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
@@ -42,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private var currentMapState = MapUiState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
+    private val commandHistory = ArrayDeque<HomeCommandRow>()
     private var currentPage = Page.HOME
 
     private val clockRunnable = object : Runnable {
@@ -62,9 +62,10 @@ class MainActivity : AppCompatActivity() {
         binding.tvProductType.text = "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}"
         bindObservers()
         bindControls()
-        binding.mapPreviewView.interactionEnabled = false
-        binding.mapPreviewView.showLabels = false
+        binding.mapPreviewView.interactionEnabled = true
+        binding.mapPreviewView.showLabels = true
         showPage(Page.HOME)
+        bindCommandRows()
     }
 
     override fun onStart() {
@@ -99,9 +100,11 @@ class MainActivity : AppCompatActivity() {
                 false -> "离线"
                 null -> "--"
             }}"
+            bindStatus(viewModel.status.value)
         }
         viewModel.lastHeartbeatAt.observe(this) { time ->
             binding.tvLastHeartbeat.text = "最后在线时间：${time?.let { timeFormat.format(Date(it)) } ?: "--"}"
+            bindStatus(viewModel.status.value)
         }
         viewModel.status.observe(this) { bindStatus(it) }
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
@@ -145,17 +148,16 @@ class MainActivity : AppCompatActivity() {
         }
         binding.btnReloadMap.setOnClickListener { viewModel.retryMapDownload() }
         binding.btnCenterRobot.setOnClickListener {
-            if (!binding.mapPageView.centerRobot()) {
-                binding.mapPageView.resetViewport()
+            if (!binding.mapPreviewView.centerRobot()) {
+                binding.mapPreviewView.resetViewport()
                 Toast.makeText(this, "暂无有效机器人位置，已显示全部地图", Toast.LENGTH_SHORT).show()
             }
         }
         binding.btnMapReset.setOnClickListener { binding.mapPageView.resetViewport() }
-        binding.btnMapCenter.setOnClickListener {
-            if (!binding.mapPageView.centerRobot()) {
-                Toast.makeText(this, "暂无有效机器人位置", Toast.LENGTH_SHORT).show()
-            }
-        }
+        binding.btnMapCenter.setOnClickListener { centerMapOnRobot() }
+        binding.btnMapZoomIn.setOnClickListener { binding.mapPageView.zoomIn() }
+        binding.btnMapZoomOut.setOnClickListener { binding.mapPageView.zoomOut() }
+        binding.btnMapLocate.setOnClickListener { centerMapOnRobot() }
         binding.btnViewLogs.setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
         }
@@ -228,8 +230,7 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvStatusDetails.text = details
         binding.tvRemoteStatus.text = details
-        findViewById<TextView?>(com.robot.solar.R.id.tvHomeStatusSummary)?.text =
-            details.lineSequence().take(6).joinToString("\n")
+        bindHomeStatusCard(status)
     }
 
     private fun bindMap(mapState: MapUiState) {
@@ -250,8 +251,13 @@ class MainActivity : AppCompatActivity() {
             "$source 地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
         }
         binding.tvMapMeta.text = meta
-        binding.tvMapPageMeta.text = buildMapJsonSummary(mapState, map)
         val readyMap = mapState.pvMap.takeIf { mapState.status == MapLoadStatus.READY }
+        binding.tvMapPageMeta.text = readyMap?.let {
+            "■ 光伏板区域（${it.cells.size}）"
+        } ?: "■ 光伏板区域"
+        binding.tvMapBridgeLegend.text = readyMap?.let {
+            "■ 板间桥接区域（${it.bridges.size}）"
+        } ?: "■ 板间桥接区域"
         binding.mapPreviewView.setMap(readyMap)
         binding.mapPageView.setMap(readyMap)
         binding.tvMapState.visibility = if (readyMap == null) View.VISIBLE else View.GONE
@@ -277,60 +283,9 @@ class MainActivity : AppCompatActivity() {
         bindStatus(viewModel.status.value)
     }
 
-    private fun buildMapJsonSummary(mapState: MapUiState, notice: MapMessage?): String {
-        val pvMap = mapState.pvMap
-        return buildString {
-            if (mapState.isLocalDemo) append("数据来源：本地测试 JSON\n")
-            append("通知名称：${notice?.mapName ?: "--"}\n")
-            append("通知编号：${notice?.mapId ?: "--"}\n")
-            append("通知版本：${notice?.mapVersion ?: "--"}")
-            if (pvMap == null) return@buildString
-            append("\nJSON map_id：${pvMap.mapId}")
-            append("\nJSON version：${pvMap.version}")
-            currentPose?.let { pose ->
-                append("\n机器人位置：B${pose.blockId ?: "--"} / C${pose.cellId ?: "--"} / ${ProtocolDisplayText.mapHeading(pose.headingCode, pose.heading)}")
-            }
-            append("\nsource：${pvMap.source?.type ?: "--"} / ${pvMap.source?.fileName ?: "--"}")
-            pvMap.source?.generatedAt?.let { append(" / $it") }
-            append("\nframe：${pvMap.frame.unit}")
-            pvMap.frame.origin?.let { origin ->
-                append(
-                    String.format(
-                        Locale.getDefault(),
-                        "  lat=%.7f lon=%.7f yaw=%.1f°",
-                        origin.latitudeDeg ?: 0.0,
-                        origin.longitudeDeg ?: 0.0,
-                        origin.yawDeg ?: 0.0
-                    )
-                )
-            }
-            append("\ncell_model：${pvMap.cellModel.innerRows} x ${pvMap.cellModel.innerCols}")
-            append("\nblocks：${pvMap.blocks.size} 个，cells：${pvMap.cells.size} 个，bridges：${pvMap.bridges.size} 个")
-            append("\nblock 明细：")
-            append(
-                pvMap.blocks.joinToString("；") { block ->
-                    "B${block.blockId} ${block.rows}x${block.cols} cell=${block.cellIds.size} cleanable=${block.cleanable}"
-                }
-            )
-            append("\ncell 明细：")
-            append(
-                pvMap.cells.joinToString("；") { cell ->
-                    "C${cell.cellId}=B${cell.blockId}[${cell.row},${cell.col}]"
-                }
-            )
-            append("\nbridge 明细：")
-            append(
-                if (pvMap.bridges.isEmpty()) {
-                    "--"
-                } else {
-                    pvMap.bridges.joinToString("；") { bridge ->
-                        val endpoints = bridge.endpoints.joinToString("<->") { endpoint ->
-                            "B${endpoint.blockId}[${endpoint.cellRow},${endpoint.cellCol}] ${endpoint.edge} (${endpoint.innerRow},${endpoint.innerCol})"
-                        }
-                        "BR${bridge.bridgeId} ${bridge.source ?: "--"} $endpoints"
-                    }
-                }
-            )
+    private fun centerMapOnRobot() {
+        if (!binding.mapPageView.centerRobot()) {
+            Toast.makeText(this, "暂无有效机器人位置", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -338,8 +293,85 @@ class MainActivity : AppCompatActivity() {
         val commandName = ProtocolDisplayText.commandName(this, state.cmd)
         val statusText = ProtocolDisplayText.commandStatus(this, state.status)
         binding.tvCommandState.text = "最近操作：$commandName · $statusText"
+        if (state.status != CommandStatus.IDLE || state.cmd != null) {
+            upsertCommandRow(state, commandName, statusText)
+            bindCommandRows()
+        }
         if (state.status != CommandStatus.IDLE && state.status != CommandStatus.SENDING) {
             Toast.makeText(this, ProtocolDisplayText.commandFeedback(this, state.cmd, state.status), Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun bindHomeStatusCard(status: StatusMessage?) {
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeOnline)?.text =
+            "在线状态：${when (viewModel.deviceOnline.value) {
+                true -> "在线"
+                false -> "离线"
+                null -> "--"
+            }}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeWorkStatus)?.text =
+            "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeControlMode)?.text =
+            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeBattery)?.text =
+            "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeLinearSpeed)?.text =
+            "线速度：${status?.linearSpeedCms?.let { String.format(Locale.getDefault(), "%.0f cm/s", it) } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeAngularSpeed)?.text =
+            "角速度：${status?.angularSpeedRadps?.let { String.format(Locale.getDefault(), "%.2f rad/s", it) } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeDeviceStatus)?.text =
+            "设备状态：${status?.let { ProtocolDisplayText.deviceStatus(this, it.deviceStatus) } ?: "--"}"
+        findViewById<TextView?>(com.robot.solar.R.id.tvHomeMovementStatus)?.text =
+            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}"
+    }
+
+    private fun upsertCommandRow(state: CommandUiState, commandName: String, statusText: String) {
+        val key = state.cmdId ?: "${state.cmd}-${state.timestampMillis}"
+        val row = HomeCommandRow(
+            key = key,
+            time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(state.timestampMillis)),
+            command = state.cmd ?: commandName,
+            params = "--",
+            status = statusText,
+            description = commandDescription(state.cmd, state.status)
+        )
+        val existing = commandHistory.indexOfFirst { it.key == key }
+        if (existing >= 0) {
+            commandHistory.removeAt(existing)
+        }
+        commandHistory.addFirst(row)
+        while (commandHistory.size > 4) commandHistory.removeLast()
+    }
+
+    private fun bindCommandRows() {
+        val placeholders = listOf(
+            com.robot.solar.R.id.tvCommandRow1,
+            com.robot.solar.R.id.tvCommandRow2,
+            com.robot.solar.R.id.tvCommandRow3,
+            com.robot.solar.R.id.tvCommandRow4
+        )
+        placeholders.forEachIndexed { index, id ->
+            findViewById<TextView?>(id)?.text = commandHistory.elementAtOrNull(index)?.let {
+                "${it.time}    ${it.command}    ${it.params}    ${it.status}    ${it.description}"
+            } ?: "--    --    --    --    --"
+        }
+    }
+
+    private fun commandDescription(cmd: String?, status: CommandStatus): String {
+        val actionText = when (cmd) {
+            "start" -> "机器人开始自动运行"
+            "stop" -> "机器人停止运行"
+            "estop" -> "紧急停止执行"
+            "clear_estop" -> "已解除急停状态"
+            else -> "等待命令执行"
+        }
+        return when (status) {
+            CommandStatus.SENDING -> "命令已发送，等待回执"
+            CommandStatus.SUCCESS -> actionText
+            CommandStatus.FAILED -> "设备未确认执行"
+            CommandStatus.TIMEOUT -> "回执等待超时"
+            CommandStatus.CONNECTION_LOST -> "连接中断，结果未知"
+            CommandStatus.IDLE -> "--"
         }
     }
 
@@ -401,3 +433,12 @@ private enum class Page {
     REMOTE,
     STATUS
 }
+
+private data class HomeCommandRow(
+    val key: String,
+    val time: String,
+    val command: String,
+    val params: String,
+    val status: String,
+    val description: String
+)

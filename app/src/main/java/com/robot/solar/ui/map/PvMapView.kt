@@ -31,6 +31,8 @@ class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : Vi
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(22, 45, 67); textSize = 13f * resources.displayMetrics.scaledDensity; textAlign = Paint.Align.CENTER; isFakeBoldText = true }
     private val trailPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 184, 101); style = Paint.Style.STROKE; strokeWidth = 3f; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val robotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(25, 184, 101); style = Paint.Style.FILL }
+    private val robotHaloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(46, 25, 184, 101); style = Paint.Style.FILL }
+    private val headingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(130, 25, 184, 101); style = Paint.Style.FILL }
     private val transform = Matrix()
     private val inverse = Matrix()
     private var map: PvMap? = null
@@ -94,6 +96,10 @@ class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : Vi
         invalidate()
     }
 
+    fun zoomIn() = zoomBy(1.25f)
+
+    fun zoomOut() = zoomBy(0.8f)
+
     fun centerRobot(): Boolean {
         val position = robot ?: return false
         val screen = mapToScreen(position.point.u, position.point.v)
@@ -101,6 +107,19 @@ class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : Vi
         translateY += height / 2f - screen.y
         invalidate()
         return true
+    }
+
+    private fun zoomBy(factor: Float) {
+        if (map == null || width == 0 || height == 0) return
+        val focusX = width / 2f
+        val focusY = height / 2f
+        val before = screenToMap(focusX, focusY)
+        userScale = (userScale * factor).coerceIn(1f, 8f)
+        updateMatrix()
+        val after = mapToScreen(before.u, before.v)
+        translateX += focusX - after.x
+        translateY += focusY - after.y
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -201,18 +220,22 @@ class PvMapView(context: Context, attrs: android.util.AttributeSet? = null) : Vi
 
     private fun drawRobot(canvas: Canvas) {
         val position = robot ?: return
-        val radius = 9f / max(baseScale * userScale, 0.001f)
+        val scale = max(baseScale * userScale, 0.001f)
+        val radius = 8f / scale
+        val headingLength = 42f / scale
+        val headingHalfWidth = 20f / scale
         canvas.save()
         canvas.translate(position.point.u.toFloat(), position.point.v.toFloat())
         canvas.rotate(position.headingDegrees.toFloat())
-        val path = Path().apply {
-            moveTo(radius * 1.5f, 0f)
-            lineTo(-radius, radius)
-            lineTo(-radius * 0.5f, 0f)
-            lineTo(-radius, -radius)
+        val heading = Path().apply {
+            moveTo(radius * 0.5f, 0f)
+            lineTo(headingLength, headingHalfWidth)
+            lineTo(headingLength, -headingHalfWidth)
             close()
         }
-        canvas.drawPath(path, robotPaint)
+        canvas.drawPath(heading, headingPaint)
+        canvas.drawCircle(0f, 0f, radius * 1.8f, robotHaloPaint)
+        canvas.drawCircle(0f, 0f, radius, robotPaint)
         canvas.restore()
     }
 
