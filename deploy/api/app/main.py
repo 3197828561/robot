@@ -7,8 +7,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -16,6 +19,8 @@ from pydantic import BaseModel, EmailStr, Field
 from pydantic_settings import BaseSettings
 from sqlalchemy import URL, DateTime, ForeignKey, Integer, String, Text, create_engine, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+
+from app.map_upload import router as map_upload_router
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
@@ -232,6 +237,15 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="VGSolar Robot API", version="0.1.0", lifespan=lifespan)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path == "/api/maps/upload":
+        return JSONResponse(status_code=400, content={"detail": jsonable_encoder(exc.errors())})
+    return JSONResponse(status_code=422, content={"detail": jsonable_encoder(exc.errors())})
+
+
+app.include_router(map_upload_router)
 
 app.add_middleware(
     CORSMiddleware,
