@@ -34,6 +34,11 @@ services:
       API_BOOTSTRAP_EMAIL: ${API_BOOTSTRAP_EMAIL}
       API_BOOTSTRAP_PASSWORD: ${API_BOOTSTRAP_PASSWORD}
       PUBLIC_HOST: ${PUBLIC_HOST}
+      MAP_STATIC_ROOT: /opt/robot-platform/static/maps
+      MAP_PUBLIC_BASE_URL: ${MAP_PUBLIC_BASE_URL}
+      MAP_UPLOAD_TOKEN: ${MAP_UPLOAD_TOKEN}
+    volumes:
+      - /opt/robot-platform/static/maps:/opt/robot-platform/static/maps
     expose:
       - "8000"
     healthcheck:
@@ -53,6 +58,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - /opt/robot-platform/static/maps:/usr/share/nginx/html/maps:ro
 
 volumes:
   postgres_data:
