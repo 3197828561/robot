@@ -136,6 +136,6 @@ class DirectionPadView @JvmOverloads constructor(
 enum class ManualDirection(val linearSpeedCms: Double, val angularSpeedRadps: Double) {
     FORWARD(20.0, 0.0),
     BACKWARD(-20.0, 0.0),
-    LEFT(0.0, -0.5),
-    RIGHT(0.0, 0.5)
+    LEFT(0.0, 0.5),
+    RIGHT(0.0, -0.5)
 }
