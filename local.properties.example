@@ -1,6 +1,12 @@
 # 复制到项目根目录 local.properties（该文件已在 .gitignore 中，不会提交）
 # Android SDK 路径由 Android Studio 自动维护，请勿删除 sdk.dir
 
+# 本机开发工具（建议使用正斜杠；路径只保存在 local.properties，不提交）
+java.home=C:/path/to/jdk-21
+mqtt.client.dir=C:/path/to/mosquitto
+adb.path=C:/path/to/Android/Sdk/platform-tools/adb.exe
+emulator.path=C:/path/to/Android/Sdk/emulator/emulator.exe
+
 # HTTP API（当前阿里云 ECS）
 api.base.url=http://47.103.157.213/api
 

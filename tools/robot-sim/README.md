@@ -22,6 +22,10 @@ local.properties
 使用的字段：
 
 ```properties
+java.home=C:/your/project/.local-tools/jdk-21
+mqtt.client.dir=C:/your/project/.local-tools/mosquitto
+adb.path=C:/Android/Sdk/platform-tools/adb.exe
+emulator.path=C:/Android/Sdk/emulator/emulator.exe
 mqtt.host=47.103.157.213
 mqtt.port=1883
 mqtt.username=app_user_001
@@ -31,6 +35,16 @@ mqtt.robot.password=robot mqtt password
 mqtt.product_type=crawler
 mqtt.default_device_id=crawler_00000001
 ```
+
+本机工具路径建议统一写入已被 Git 忽略的 `local.properties`。JDK 和 Mosquitto
+二进制可以放在项目根目录同样被忽略的 `.local-tools/` 中。后续运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\run-gradle.ps1 testDebugUnitTest lintDebug assembleDebug
+```
+
+Gradle 包装脚本会自动读取 `java.home`；本目录下三个 MQTT 模拟脚本会自动读取
+`mqtt.client.dir`。命令行传入 `-MosquittoDir` 时仍以命令行参数为最高优先级。
 
 账号优先级：
 

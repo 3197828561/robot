@@ -12,6 +12,10 @@
 .DS_Store
 /build
 /captures
+.codex-artifacts/
+.codex-tmp/
+.kotlin/
+.local-tools/
 .externalNativeBuild
 .cxx
 local.properties

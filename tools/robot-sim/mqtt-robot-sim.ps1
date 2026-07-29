@@ -1,7 +1,7 @@
 param(
     [ValidateSet("auto", "menu", "listen", "smoke")]
     [string]$Mode = "auto",
-    [string]$MosquittoDir = "C:\Program Files\Mosquitto",
+    [string]$MosquittoDir = "",
     [string]$LocalProperties = "local.properties",
     [string]$HostNameOverride = "",
     [string]$PortOverride = "",
@@ -30,11 +30,11 @@ function Read-LocalProperties {
     param([string]$Path)
     $props = @{}
     if (!(Test-Path $Path)) { return $props }
-    Get-Content $Path -Encoding UTF8 | ForEach-Object {
-        $line = $_.Trim()
-        if ($line.Length -eq 0 -or $line.StartsWith("#")) { return }
+    foreach ($rawLine in (Get-Content $Path -Encoding UTF8)) {
+        $line = $rawLine.Trim()
+        if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
         $idx = $line.IndexOf("=")
-        if ($idx -le 0) { return }
+        if ($idx -le 0) { continue }
         $key = $line.Substring(0, $idx).Trim()
         $value = $line.Substring($idx + 1).Trim().Trim('"')
         $props[$key] = $value
@@ -633,6 +633,11 @@ function Run-Menu {
 }
 
 $props = Read-LocalProperties $LocalProperties
+$MosquittoDir = if ($MosquittoDir) {
+    $MosquittoDir
+} else {
+    Get-Prop $props @("mqtt.client.dir", "mosquitto.dir") "C:\Program Files\Mosquitto"
+}
 $HostName = if ($HostNameOverride) { $HostNameOverride } else { Get-Prop $props @("mqtt.host") "47.103.157.213" }
 $Port = if ($PortOverride) { $PortOverride } else { Get-Prop $props @("mqtt.port") "1883" }
 $Username = if ($UsernameOverride) { $UsernameOverride } else { Get-Prop $props @("mqtt.robot.username", "mqtt.username") "app_user_001" }
