@@ -468,8 +468,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     fun publishRemote(linearSpeedCms: Double, angularRadps: Double, durationMs: Int = 300): Boolean {
         val deviceId = boundDeviceId ?: return false
         val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
-        val safeLinear = linearSpeedCms.coerceIn(-20.0, 20.0)
-        val safeAngular = angularRadps.coerceIn(-0.5, 0.5)
+        val safeLinear = RemoteControlContract.clampLinear(linearSpeedCms)
+        val safeAngular = RemoteControlContract.clampAngular(angularRadps)
         val json = JSONObject()
             .put("version", PROTOCOL_VERSION)
             .put("deviceId", deviceId)

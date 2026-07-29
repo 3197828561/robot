@@ -88,19 +88,26 @@ App 会先校验：
 
 | Topic | Payload type | 用途 | App 入口 |
 |-------|--------------|------|----------|
-| `device/{productType}/{deviceId}/remote` | `remote` | 手动模式下四向固定速度控制，QoS 0 | `publishRemote()` |
+| `device/{productType}/{deviceId}/remote` | `remote` | 手动模式下四向可配置速度控制，QoS 0 | `publishRemote()` |
 | `device/{productType}/{deviceId}/cmd` | `cmd` | start/stop/pause/resume/replan/manual/auto/estop/clear_estop | `prepareCommand()` + `publishCmd()` |
 
 遥控映射：
 
 | 操作 | `linearSpeedCms` | `angularSpeedRadps` |
 |------|------------------------|--------------------------|
-| 前进 | `+20.0` | `0.0` |
-| 后退 | `-20.0` | `0.0` |
-| 左转 | `0.0` | `+0.5` |
-| 右转 | `0.0` | `-0.5` |
+| 前进 | `+L` | `0.0` |
+| 后退 | `-L` | `0.0` |
+| 左转 | `0.0` | `+A` |
+| 右转 | `0.0` | `-A` |
 | 停止 | `0.0` | `0.0` |
 | 急停 | 发布 `cmd = "estop"` | - |
+
+`L` 为 APP UI 设置的非负线速度大小，范围 `0..50 cm/s`；`A` 为非负角速度
+大小，范围 `0..0.5 rad/s`。预设为慢速 `10/0.1`、标准 `30/0.3`、高速
+`50/0.5`，默认标准档。自定义值按设备保存；线速度步进 `1 cm/s`，角速度
+步进 `0.1 rad/s`。方向键只负责绑定正负号，最终下行范围分别为
+`[-50, 50] cm/s` 与 `[-0.5, 0.5] rad/s`。长按过程中修改速度时，下一帧
+周期消息即使用新值。
 
 进入手动遥控前，App 先发送 `manual`，等待成功 ACK 及
 `status.operationalMode=manual` 后才允许发送 `remote`。方向按钮按住前 `500ms`

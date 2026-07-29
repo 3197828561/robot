@@ -114,7 +114,9 @@ start stop pause resume replan manual auto estop clear_estop
   - `start.heading` 必须为 `0..3`；
 - `stop/pause/resume/replan` 校验 `targetMissionId`；
 - `cmd_ack=success` 仅表示命令已受理，最终结果由后续 `status.runState` 表示；
-- `remote` 仅在 `operationalMode=manual` 且 `safetyState=normal` 时处理；
+- `remote` 仅在 `operationalMode=manual` 且 `safetyState=normal` 时处理，并校验
+  `linearSpeedCms` 在 `[-50, 50] cm/s`、`angularSpeedRadps` 在
+  `[-0.5, 0.5] rad/s`；
 - `status` 会上报：
 
 ```text

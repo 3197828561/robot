@@ -194,6 +194,19 @@ data class RemoteMessage(
     val durationMs: Int
 )
 
+object RemoteControlContract {
+    const val MIN_LINEAR_SPEED_CMS = -50.0
+    const val MAX_LINEAR_SPEED_CMS = 50.0
+    const val MIN_ANGULAR_SPEED_RADPS = -0.5
+    const val MAX_ANGULAR_SPEED_RADPS = 0.5
+
+    fun clampLinear(value: Double): Double =
+        value.coerceIn(MIN_LINEAR_SPEED_CMS, MAX_LINEAR_SPEED_CMS)
+
+    fun clampAngular(value: Double): Double =
+        value.coerceIn(MIN_ANGULAR_SPEED_RADPS, MAX_ANGULAR_SPEED_RADPS)
+}
+
 data class CommandPublishResult(
     val published: Boolean,
     val cmdId: String?,

@@ -735,6 +735,12 @@
                             android:text="长按方向按钮 0.5 秒后开始控制，松开立即停止"
                             android:textColor="@color/control_text_muted"
                             android:textSize="14sp" />
+
+                        <com.robot.solar.ui.main.ManualSpeedControlView
+                            android:id="@+id/manualSpeedControl"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

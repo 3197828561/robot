@@ -425,8 +425,26 @@ function Handle-DownlinkLine {
                 Write-Host "[DROP] remote requires operationalMode=manual and safetyState=normal"
                 return
             }
-            $script:LinearSpeed = [double]$msg.linearSpeedCms
-            $script:AngularSpeed = [double]$msg.angularSpeedRadps
+            if ($null -eq $msg.linearSpeedCms -or $null -eq $msg.angularSpeedRadps) {
+                Write-Host "[DROP] remote requires linearSpeedCms and angularSpeedRadps"
+                return
+            }
+            try {
+                $linearSpeed = [double]$msg.linearSpeedCms
+                $angularSpeed = [double]$msg.angularSpeedRadps
+            } catch {
+                Write-Host "[DROP] remote speed fields must be numeric"
+                return
+            }
+            $invalidNumber =
+                [double]::IsNaN($linearSpeed) -or [double]::IsInfinity($linearSpeed) -or
+                [double]::IsNaN($angularSpeed) -or [double]::IsInfinity($angularSpeed)
+            if ($invalidNumber -or [Math]::Abs($linearSpeed) -gt 50.0 -or [Math]::Abs($angularSpeed) -gt 0.5) {
+                Write-Host "[DROP] remote speed out of range: linear [-50,50] cm/s, angular [-0.5,0.5] rad/s"
+                return
+            }
+            $script:LinearSpeed = $linearSpeed
+            $script:AngularSpeed = $angularSpeed
             $moving = [Math]::Abs($script:LinearSpeed) -gt 0.01 -or [Math]::Abs($script:AngularSpeed) -gt 0.01
             $script:WorkStatus = "stopped"
             $script:DeviceStatus = "normal"

@@ -7,6 +7,7 @@ import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.CoverageCommandParams
 import com.robot.solar.network.mqtt.CoverageStart
+import com.robot.solar.network.mqtt.RemoteControlContract
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -242,5 +243,13 @@ class MqttModelsParseTest {
 
         assertEquals(4_294_967_295L, coverage["mapId"].asLong)
         assertEquals(4_294_967_295L, coverage["mapVersion"].asLong)
+    }
+
+    @Test
+    fun remoteContract_clampsAppSpeedToRobotSignedRanges() {
+        assertEquals(50.0, RemoteControlContract.clampLinear(75.0), 0.0)
+        assertEquals(-50.0, RemoteControlContract.clampLinear(-75.0), 0.0)
+        assertEquals(0.5, RemoteControlContract.clampAngular(1.0), 0.0)
+        assertEquals(-0.5, RemoteControlContract.clampAngular(-1.0), 0.0)
     }
 }

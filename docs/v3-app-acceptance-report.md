@@ -30,6 +30,7 @@ Robot MQTT→`cloud_comm`→`/mission/command`→mission_planner ROS 证据仍�
 | 安全状态优先 | `MissionStatusDisplay` 与测试覆盖 estop、clearing_estop、low_battery、fault | 通过 |
 | MANUAL ACK + status 后才遥控 | `manualCommandAccepted` 与 `operationalMode=manual`、`safetyState=normal` 同时满足才开放方向键 | 通过 |
 | 约 20Hz 遥控和主动零速 | 500ms 长按门槛，50ms 周期；松开、失焦、后台、离页、离线、安全异常均停止并主动归零 | 通过 |
+| APP 可配置遥控速度 | UI 仅设置非负大小：线速度 `0..50 cm/s`、角速度 `0..0.5 rad/s`；方向键绑定正负号；慢速/标准/高速预设及按设备持久化已验证 | 通过 |
 | AUTO 不恢复旧任务 | 退出手动页先零速，再发送空参数 `auto`，只等待模式变为 auto | 通过 |
 | CLEAR_ESTOP 等待 normal | ACK 后保持解除等待态，收到 `safetyState=normal` 才结束 | 通过 |
 | 服务错误明确提示 | 全部文档 errorCode 有中文说明并保留原始 code；服务不可用/超时/拒绝有单测和失败 ACK UI 验证 | 通过 |

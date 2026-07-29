@@ -1,6 +1,9 @@
 package com.robot.solar
 
 import com.robot.solar.ui.main.ManualDirection
+import com.robot.solar.viewmodel.ManualSpeedPolicy
+import com.robot.solar.viewmodel.ManualSpeedPreset
+import com.robot.solar.viewmodel.ManualSpeedSettings
 import com.robot.solar.viewmodel.ManualControlPolicy
 import com.robot.solar.viewmodel.MissionControlPolicy
 import com.robot.solar.viewmodel.MissionCommandErrorDisplay
@@ -13,14 +16,58 @@ import org.junit.Test
 
 class ManualControlPolicyTest {
     @Test
-    fun directions_useSecondVersionFixedSpeeds() {
-        assertEquals(20.0, ManualDirection.FORWARD.linearSpeedCms, 0.0)
-        assertEquals(-20.0, ManualDirection.BACKWARD.linearSpeedCms, 0.0)
-        assertEquals(0.5, ManualDirection.LEFT.angularSpeedRadps, 0.0)
-        assertEquals(-0.5, ManualDirection.RIGHT.angularSpeedRadps, 0.0)
+    fun directions_applyConfiguredMagnitudeAndOwnTheSigns() {
+        val settings = ManualSpeedSettings(
+            linearSpeedCms = 37.0,
+            angularSpeedRadps = 0.4
+        )
+
+        assertEquals(37.0, ManualSpeedPolicy.velocityFor(ManualDirection.FORWARD, settings).linearSpeedCms, 0.0)
+        assertEquals(-37.0, ManualSpeedPolicy.velocityFor(ManualDirection.BACKWARD, settings).linearSpeedCms, 0.0)
+        assertEquals(0.4, ManualSpeedPolicy.velocityFor(ManualDirection.LEFT, settings).angularSpeedRadps, 0.0)
+        assertEquals(-0.4, ManualSpeedPolicy.velocityFor(ManualDirection.RIGHT, settings).angularSpeedRadps, 0.0)
         ManualDirection.entries.forEach { direction ->
-            assertTrue(direction.linearSpeedCms == 0.0 || direction.angularSpeedRadps == 0.0)
+            val velocity = ManualSpeedPolicy.velocityFor(direction, settings)
+            assertTrue(velocity.linearSpeedCms == 0.0 || velocity.angularSpeedRadps == 0.0)
         }
+    }
+
+    @Test
+    fun manualSpeed_defaultsPresetsAndBounds_matchConfirmedUiContract() {
+        assertEquals(ManualSpeedSettings(30.0, 0.3), ManualSpeedPolicy.normalize(ManualSpeedSettings()))
+        assertEquals(
+            ManualSpeedSettings(10.0, 0.1),
+            ManualSpeedPolicy.fromPreset(ManualSpeedPreset.SLOW)
+        )
+        assertEquals(
+            ManualSpeedSettings(30.0, 0.3),
+            ManualSpeedPolicy.fromPreset(ManualSpeedPreset.STANDARD)
+        )
+        assertEquals(
+            ManualSpeedSettings(50.0, 0.5),
+            ManualSpeedPolicy.fromPreset(ManualSpeedPreset.HIGH)
+        )
+        assertEquals(
+            ManualSpeedSettings(50.0, 0.5),
+            ManualSpeedPolicy.normalize(ManualSpeedSettings(99.0, 2.0))
+        )
+        assertEquals(
+            ManualSpeedSettings(0.0, 0.0),
+            ManualSpeedPolicy.normalize(ManualSpeedSettings(-1.0, -0.1))
+        )
+    }
+
+    @Test
+    fun manualSpeed_normalizesUiStepsAndDetectsOnlyExactPresets() {
+        assertEquals(
+            ManualSpeedSettings(31.0, 0.3),
+            ManualSpeedPolicy.normalize(ManualSpeedSettings(30.6, 0.26))
+        )
+        assertEquals(
+            ManualSpeedPreset.STANDARD,
+            ManualSpeedPolicy.presetFor(ManualSpeedSettings(30.0, 0.3))
+        )
+        assertEquals(null, ManualSpeedPolicy.presetFor(ManualSpeedSettings(31.0, 0.3)))
     }
 
     @Test

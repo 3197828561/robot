@@ -8,6 +8,7 @@ import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.viewModelScope
+import com.robot.solar.data.session.ManualSpeedPreferences
 import com.robot.solar.network.mqtt.CloudCommMqttManager
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
@@ -31,6 +32,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val mqtt = CloudCommMqttManager.getInstance(application)
     private val deviceRepository = DeviceRepository.getInstance(application)
+    private val manualSpeedPreferences = ManualSpeedPreferences(application)
+    private val manualSpeedDeviceId = deviceRepository.currentMqttIdentity().deviceId
+    @Volatile
+    private var manualSpeedSnapshot = manualSpeedPreferences.load(manualSpeedDeviceId)
 
     val mqttConnected: LiveData<Boolean> = mqtt.mqttConnected
     val deviceOnline: LiveData<Boolean?> = mqtt.deviceOnline
@@ -40,6 +45,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
     val mapState: LiveData<MapUiState> = mqtt.mapState
     val pose: LiveData<PoseMessage?> = mqtt.pose
+    private val _manualSpeedSettings = MutableLiveData(manualSpeedSnapshot)
+    val manualSpeedSettings: LiveData<ManualSpeedSettings> = _manualSpeedSettings
 
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
@@ -186,7 +193,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             while (true) {
                 if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) break
                 val active = currentDirection ?: break
-                mqtt.publishRemote(active.linearSpeedCms, active.angularSpeedRadps)
+                val velocity = ManualSpeedPolicy.velocityFor(active, manualSpeedSnapshot)
+                mqtt.publishRemote(velocity.linearSpeedCms, velocity.angularSpeedRadps)
                 delay(50)
             }
             mqtt.publishRemote(0.0, 0.0)
@@ -280,6 +288,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             action = "start",
             params = mapOf("taskKind" to "coverage", "coverage" to coverage),
             paramsSummary = summary
+        )
+    }
+
+    fun setManualSpeedSettings(settings: ManualSpeedSettings) {
+        val normalized = ManualSpeedPolicy.normalize(settings)
+        if (normalized == manualSpeedSnapshot) return
+        manualSpeedSnapshot = normalized
+        manualSpeedPreferences.save(manualSpeedDeviceId, normalized)
+        _manualSpeedSettings.value = normalized
+    }
+
+    fun selectManualSpeedPreset(preset: ManualSpeedPreset) {
+        setManualSpeedSettings(ManualSpeedPolicy.fromPreset(preset))
+    }
+
+    fun adjustLinearSpeed(deltaCms: Double) {
+        setManualSpeedSettings(
+            manualSpeedSnapshot.copy(
+                linearSpeedCms = manualSpeedSnapshot.linearSpeedCms + deltaCms
+            )
+        )
+    }
+
+    fun adjustAngularSpeed(deltaRadps: Double) {
+        setManualSpeedSettings(
+            manualSpeedSnapshot.copy(
+                angularSpeedRadps = manualSpeedSnapshot.angularSpeedRadps + deltaRadps
+            )
         )
     }
 

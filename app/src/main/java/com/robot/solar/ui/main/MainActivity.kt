@@ -118,6 +118,9 @@ class MainActivity : AppCompatActivity() {
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
         viewModel.mapState.observe(this) { bindMap(it) }
         viewModel.pose.observe(this) { bindPose(it) }
+        viewModel.manualSpeedSettings.observe(this) {
+            binding.manualSpeedControl.setSettings(it)
+        }
         viewModel.commandState.observe(this) { bindCommandState(it) }
         viewModel.controlsEnabled.observe(this) { bindAvailability(it) }
         viewModel.awaitingStartStatus.observe(this) { bindStatus(viewModel.status.value) }
@@ -143,6 +146,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindControls() {
+        binding.manualSpeedControl.onSettingsChanged = viewModel::setManualSpeedSettings
         binding.btnStart.setOnClickListener { showCoverageTaskDialog() }
         binding.btnStopRun.setOnClickListener { viewModel.sendMissionCommand("停止任务", "stop") }
         binding.btnPause.setOnClickListener { viewModel.sendMissionCommand("暂停任务", "pause") }
