@@ -7,8 +7,13 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
+import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.robot.solar.data.session.ManualSpeedPreferences
+import com.robot.solar.entity.LogCategory
+import com.robot.solar.entity.LogSeverity
+import com.robot.solar.entity.LogSource
+import com.robot.solar.entity.StructuredLogDraft
 import com.robot.solar.network.mqtt.CloudCommMqttManager
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
@@ -21,17 +26,20 @@ import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.PreparedCommand
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.repository.DeviceRepository
+import com.robot.solar.repository.LogRepository
 import com.robot.solar.ui.main.ManualDirection
 import com.robot.solar.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val mqtt = CloudCommMqttManager.getInstance(application)
     private val deviceRepository = DeviceRepository.getInstance(application)
+    private val logRepository = LogRepository.getInstance(application)
     private val manualSpeedPreferences = ManualSpeedPreferences(application)
     private val manualSpeedDeviceId = deviceRepository.currentMqttIdentity().deviceId
     @Volatile
@@ -47,6 +55,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val pose: LiveData<PoseMessage?> = mqtt.pose
     private val _manualSpeedSettings = MutableLiveData(manualSpeedSnapshot)
     val manualSpeedSettings: LiveData<ManualSpeedSettings> = _manualSpeedSettings
+    val recentCommandLogs = logRepository.observeRecentCommands().asLiveData()
 
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
@@ -69,7 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         addSource(deviceOnline) {
             if (it != true) {
                 _remoteModeAccepted.value = false
-                stopRemote(sendZero = true)
+                stopRemote(sendZero = true, reason = "设备离线")
             }
             refresh()
         }
@@ -112,16 +121,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastCommandParamsSummary: String? = null
     private var pendingCommandParamsSummary: String? = null
     private var pendingExitToAuto = false
-    private var lastMissionErrorSignature: String? = null
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
+    @Volatile
+    private var remoteSessionStarted = false
     private val cmdAckObserver = Observer<CmdAckMessage?> { handleCmdAck(it) }
     private val mqttConnectedObserver = Observer<Boolean> { connected ->
         if (connected != true) {
             _remoteModeAccepted.postValue(false)
             _awaitingStartStatus.postValue(false)
             _awaitingClearEstopStatus.postValue(false)
-            stopRemote(sendZero = false)
+            stopRemote(sendZero = false, reason = "MQTT 连接中断")
             if (waitingCmdId != null) {
                 finishPendingCommand(CommandStatus.CONNECTION_LOST, "MQTT 连接已断开", null)
             }
@@ -137,26 +147,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (state.safetyState == "normal") {
             _awaitingClearEstopStatus.postValue(false)
         }
-        val errorSignature = listOf(
-            state.missionId,
-            state.errorCode,
-            state.errorRetryable,
-            state.errorSource,
-            state.errorMessage
-        ).joinToString("|")
-        if (
-            errorSignature != lastMissionErrorSignature &&
-            (state.errorCode != null && state.errorCode != 0 || !state.errorMessage.isNullOrBlank())
-        ) {
-            LogUtils.device(
-                "任务错误：code=${state.errorCode ?: "--"} " +
-                    "retryable=${state.errorRetryable ?: "--"} " +
-                    "source=${state.errorSource.orEmpty()} ${state.errorMessage.orEmpty()}"
-            )
-        }
-        lastMissionErrorSignature = errorSignature
         if (state.operationalMode != "manual" || state.safetyState != "normal") {
-            stopRemote(sendZero = true)
+            stopRemote(sendZero = true, reason = "运行模式或安全状态变化")
         }
         if (state.operationalMode == "auto") {
             _remoteModeAccepted.postValue(false)
@@ -186,35 +178,82 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startRemote(direction: ManualDirection) {
         if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) return
         if (remoteJob?.isActive == true && currentDirection == direction) return
-        stopRemote(sendZero = remoteJob?.isActive == true)
+        stopRemote(sendZero = remoteJob?.isActive == true, reason = "切换控制方向")
         currentDirection = direction
         remoteJob = viewModelScope.launch(Dispatchers.IO) {
-            delay(500)
-            while (true) {
-                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) break
-                val active = currentDirection ?: break
-                val velocity = ManualSpeedPolicy.velocityFor(active, manualSpeedSnapshot)
-                mqtt.publishRemote(velocity.linearSpeedCms, velocity.angularSpeedRadps)
-                delay(50)
+            try {
+                delay(500)
+                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) {
+                    return@launch
+                }
+                val initialDirection = currentDirection ?: return@launch
+                val initialVelocity = ManualSpeedPolicy.velocityFor(initialDirection, manualSpeedSnapshot)
+                remoteSessionStarted = true
+                LogUtils.remote(
+                    eventType = "remote_started",
+                    summary = "开始${directionText(initialDirection)}控制",
+                    result = "active",
+                    detailJson = remoteDetail(
+                        initialDirection,
+                        initialVelocity.linearSpeedCms,
+                        initialVelocity.angularSpeedRadps
+                    )
+                )
+                while (true) {
+                    if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) break
+                    val active = currentDirection ?: break
+                    val velocity = ManualSpeedPolicy.velocityFor(active, manualSpeedSnapshot)
+                    mqtt.publishRemote(velocity.linearSpeedCms, velocity.angularSpeedRadps)
+                    delay(50)
+                }
+            } finally {
+                if (remoteSessionStarted) {
+                    remoteSessionStarted = false
+                    mqtt.publishRemote(0.0, 0.0)
+                    LogUtils.remote(
+                        eventType = "remote_stopped",
+                        summary = "控制条件变化，手动遥控已停止",
+                        result = "stopped",
+                        severity = LogSeverity.WARNING
+                    )
+                }
             }
-            mqtt.publishRemote(0.0, 0.0)
         }
     }
 
-    fun stopRemote(sendZero: Boolean = true) {
+    fun stopRemote(sendZero: Boolean = true, reason: String = "松开方向键") {
         val wasActive = remoteJob?.isActive == true
+        val wasStarted = remoteSessionStarted
+        val direction = currentDirection
+        remoteSessionStarted = false
         remoteJob?.cancel()
         remoteJob = null
         currentDirection = null
         if (sendZero && wasActive && mqttConnected.value == true) {
             viewModelScope.launch(Dispatchers.IO) { mqtt.publishRemote(0.0, 0.0) }
         }
+        if (wasStarted) {
+            LogUtils.remote(
+                eventType = "remote_stopped",
+                summary = "${direction?.let(::directionText).orEmpty()}控制已停止：$reason",
+                result = "stopped",
+                detailJson = JSONObject().put("reason", reason).toString()
+            )
+        }
     }
 
     fun ordinaryRemoteStop() {
         val hadActiveControl = remoteJob?.isActive == true
-        stopRemote(sendZero = false)
+        stopRemote(sendZero = false, reason = "用户执行普通停止")
         if (mqttConnected.value == true && (hadActiveControl || deviceOnline.value == true)) {
+            viewModelScope.launch(Dispatchers.IO) { mqtt.publishRemote(0.0, 0.0) }
+        }
+    }
+
+    fun leaveRemotePage() {
+        val hadActiveControl = remoteJob?.isActive == true
+        stopRemote(sendZero = false, reason = "离开手动控制页面")
+        if (hadActiveControl && mqttConnected.value == true) {
             viewModelScope.launch(Dispatchers.IO) { mqtt.publishRemote(0.0, 0.0) }
         }
     }
@@ -297,6 +336,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         manualSpeedSnapshot = normalized
         manualSpeedPreferences.save(manualSpeedDeviceId, normalized)
         _manualSpeedSettings.value = normalized
+        if (remoteSessionStarted) {
+            LogUtils.remote(
+                eventType = "remote_speed_changed",
+                summary = "手动控制速度已调整",
+                result = "active",
+                detailJson = JSONObject()
+                    .put("linearSpeedCms", normalized.linearSpeedCms)
+                    .put("angularSpeedRadps", normalized.angularSpeedRadps)
+                    .toString()
+            )
+        }
     }
 
     fun selectManualSpeedPreset(preset: ManualSpeedPreset) {
@@ -423,6 +473,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             message = "$label 发送中",
             paramsSummary = paramsSummary
         )
+        recordCommandState(
+            cmdId = command.cmdId,
+            action = command.cmd,
+            label = label,
+            status = CommandStatus.SENDING,
+            message = "正在发布到 MQTT",
+            paramsSummary = paramsSummary
+        )
         viewModelScope.launch(Dispatchers.IO) {
             val result = mqtt.publishCmd(command)
             if (result.published && result.cmdId != null) {
@@ -437,20 +495,38 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         }
                     }
                 }
-                LogUtils.device("已发送操作：$label")
+                recordCommandState(
+                    cmdId = command.cmdId,
+                    action = command.cmd,
+                    label = label,
+                    status = CommandStatus.SENDING,
+                    message = "已发布，等待机器人回执",
+                    paramsSummary = paramsSummary
+                )
             } else {
                 viewModelScope.launch {
                     if (waitingCmdId == command.cmdId) {
                         finishPendingCommand(CommandStatus.FAILED, "$label 发送失败", null)
                     }
                 }
-                LogUtils.device("命令失败：$label")
             }
         }
     }
 
     private fun rejectCommand(action: String, message: String) {
         _commandState.postValue(CommandUiState(null, action, CommandStatus.FAILED, message))
+        LogUtils.record(
+            StructuredLogDraft(
+                source = LogSource.APP,
+                category = LogCategory.COMMAND,
+                eventType = "command_rejected",
+                severity = LogSeverity.WARNING,
+                action = action,
+                result = "rejected",
+                summary = message,
+                detailJson = JSONObject().put("action", action).toString()
+            )
+        )
     }
 
     private fun handleCmdAck(ack: CmdAckMessage?) {
@@ -459,9 +535,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (pending != null && ack.cmdId == pending) {
             val pendingCmd = waitingCommand?.cmd
             if (pendingCmd != null && ack.cmd != pendingCmd) {
-                LogUtils.device(
-                    "忽略命令类型不匹配的回执：cmdId=${ack.cmdId} " +
-                        "expected=$pendingCmd actual=${ack.cmd}"
+                LogUtils.record(
+                    StructuredLogDraft(
+                        source = LogSource.ROBOT,
+                        category = LogCategory.COMMAND,
+                        eventType = "ack_type_mismatch",
+                        severity = LogSeverity.WARNING,
+                        cmdId = ack.cmdId,
+                        action = ack.cmd,
+                        result = "ignored",
+                        summary = "忽略命令类型不匹配的回执",
+                        detailJson = JSONObject()
+                            .put("expected", pendingCmd)
+                            .put("actual", ack.cmd)
+                            .toString()
+                    )
                 )
                 return
             }
@@ -499,8 +587,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     paramsSummary = lastCommandParamsSummary
                 )
             )
+            recordCommandState(
+                cmdId = ack.cmdId,
+                action = ack.cmd,
+                label = lastCommandLabel ?: ack.cmd ?: "设备命令",
+                status = status,
+                message = ack.message,
+                errorCode = ack.errorCode,
+                paramsSummary = lastCommandParamsSummary
+            )
         } else {
-            LogUtils.device("忽略无法关联的命令回执：cmdId=${ack.cmdId}")
+            LogUtils.record(
+                StructuredLogDraft(
+                    source = LogSource.ROBOT,
+                    category = LogCategory.COMMAND,
+                    eventType = "unmatched_ack",
+                    severity = LogSeverity.WARNING,
+                    cmdId = ack.cmdId,
+                    action = ack.cmd,
+                    result = "ignored",
+                    summary = "忽略无法关联的命令回执",
+                    detailJson = JSONObject()
+                        .put("ackStatus", ack.ackStatus)
+                        .put("errorCode", ack.errorCode)
+                        .toString()
+                )
+            )
         }
     }
 
@@ -557,6 +669,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 paramsSummary = pendingCommandParamsSummary
             )
         )
+        if (cmdId != null) {
+            recordCommandState(
+                cmdId = cmdId,
+                action = cmd,
+                label = lastCommandLabel ?: cmd.orEmpty(),
+                status = status,
+                message = message,
+                errorCode = errorCode,
+                paramsSummary = pendingCommandParamsSummary
+            )
+        }
+    }
+
+    private fun recordCommandState(
+        cmdId: String?,
+        action: String?,
+        label: String,
+        status: CommandStatus,
+        message: String?,
+        errorCode: String? = null,
+        paramsSummary: String? = null
+    ) {
+        val stableCmdId = cmdId ?: return
+        val result = when (status) {
+            CommandStatus.IDLE -> "idle"
+            CommandStatus.SENDING -> "sending"
+            CommandStatus.SUCCESS -> "success"
+            CommandStatus.FAILED -> "failed"
+            CommandStatus.TIMEOUT -> "timeout"
+            CommandStatus.CONNECTION_LOST -> "connection_lost"
+        }
+        val severity = when (status) {
+            CommandStatus.FAILED, CommandStatus.TIMEOUT -> LogSeverity.ERROR
+            CommandStatus.CONNECTION_LOST -> LogSeverity.WARNING
+            else -> LogSeverity.INFO
+        }
+        val detail = JSONObject()
+            .put("params", paramsSummary)
+            .put("message", message)
+            .put("errorCode", errorCode)
+            .put("result", result)
+            .toString()
+        LogUtils.command(
+            cmdId = stableCmdId,
+            action = action,
+            summary = "$label：${message ?: result}",
+            result = result,
+            paramsSummary = paramsSummary,
+            missionId = missionState.value?.missionId,
+            severity = severity,
+            detailJson = detail
+        )
     }
 
     private fun canSendCommand(action: String): Boolean {
@@ -587,6 +751,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun retryMapDownload() = mqtt.retryMapDownload()
+
+    private fun directionText(direction: ManualDirection): String = when (direction) {
+        ManualDirection.FORWARD -> "前进"
+        ManualDirection.BACKWARD -> "后退"
+        ManualDirection.LEFT -> "左转"
+        ManualDirection.RIGHT -> "右转"
+    }
+
+    private fun remoteDetail(
+        direction: ManualDirection,
+        linearSpeedCms: Double,
+        angularSpeedRadps: Double
+    ): String = JSONObject()
+        .put("direction", direction.name.lowercase())
+        .put("linearSpeedCms", linearSpeedCms)
+        .put("angularSpeedRadps", angularSpeedRadps)
+        .toString()
 
     private fun isRemoteAllowed(connected: Boolean, online: Boolean): Boolean {
         val mission = missionState.value

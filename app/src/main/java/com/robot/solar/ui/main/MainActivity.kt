@@ -15,6 +15,7 @@ import androidx.core.view.updatePadding
 import com.robot.solar.BuildConfig
 import com.robot.solar.databinding.ActivityMainBinding
 import com.robot.solar.databinding.DialogCoverageTaskBinding
+import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.map.MapPosition
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CommandStatus
@@ -30,12 +31,14 @@ import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.log.LogActivity
 import com.robot.solar.viewmodel.ControlAvailability
 import com.robot.solar.viewmodel.MainViewModel
+import com.robot.solar.viewmodel.ManualSpeedSettings
 import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONObject
 
 class MainActivity : AppCompatActivity() {
 
@@ -48,7 +51,6 @@ class MainActivity : AppCompatActivity() {
     private var currentMapState = MapUiState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
-    private val commandHistory = ArrayDeque<HomeCommandRow>()
     private var currentPage = Page.HOME
 
     private val clockRunnable = object : Runnable {
@@ -72,7 +74,7 @@ class MainActivity : AppCompatActivity() {
         binding.mapPreviewView.interactionEnabled = true
         binding.mapPreviewView.showLabels = true
         showPage(Page.HOME)
-        bindCommandRows()
+        bindCommandRows(emptyList())
     }
 
     override fun onStart() {
@@ -100,6 +102,7 @@ class MainActivity : AppCompatActivity() {
     private fun bindObservers() {
         viewModel.mqttConnected.observe(this) { connected ->
             binding.tvMqttStatus.text = "MQTT：${if (connected) "已连接" else "未连接"}"
+            bindStatus(viewModel.status.value)
         }
         viewModel.deviceOnline.observe(this) { online ->
             binding.tvDeviceOnline.text = "在线状态：${when (online) {
@@ -120,8 +123,10 @@ class MainActivity : AppCompatActivity() {
         viewModel.pose.observe(this) { bindPose(it) }
         viewModel.manualSpeedSettings.observe(this) {
             binding.manualSpeedControl.setSettings(it)
+            bindStatus(viewModel.status.value)
         }
         viewModel.commandState.observe(this) { bindCommandState(it) }
+        viewModel.recentCommandLogs.observe(this) { bindCommandRows(it.orEmpty()) }
         viewModel.controlsEnabled.observe(this) { bindAvailability(it) }
         viewModel.awaitingStartStatus.observe(this) { bindStatus(viewModel.status.value) }
         viewModel.awaitingClearEstopStatus.observe(this) { bindStatus(viewModel.status.value) }
@@ -385,9 +390,22 @@ class MainActivity : AppCompatActivity() {
                 "最后在线时间：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
             ).joinToString("\n")
         }
-        binding.tvStatusDetails.text = details
-        binding.tvRemoteStatus.text = details
         val mission = viewModel.missionState.value
+        val speed = viewModel.manualSpeedSettings.value ?: ManualSpeedSettings()
+        val remoteDetails = listOf(
+            "连接状态：MQTT ${if (viewModel.mqttConnected.value == true) "已连接" else "未连接"} · " +
+                "机器人${when (viewModel.deviceOnline.value) {
+                true -> "在线"
+                false -> "离线"
+                null -> "--"
+            }}",
+            "控制条件：模式 ${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
+                "安全 ${status?.safetyState ?: mission?.safetyState ?: "--"}",
+            "手动控制：${manualControlStateText()} · 速度 ${speed.linearSpeedCms.toInt()} cm/s / " +
+                String.format(Locale.getDefault(), "%.1f rad/s", speed.angularSpeedRadps)
+        ).joinToString("\n")
+        binding.tvStatusDetails.text = details
+        binding.tvRemoteStatus.text = remoteDetails
         binding.tvRemoteModeState.text =
             "运行模式：${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
                 "安全状态：${status?.safetyState ?: mission?.safetyState ?: "--"}"
@@ -453,10 +471,6 @@ class MainActivity : AppCompatActivity() {
         val commandName = ProtocolDisplayText.commandName(this, state.cmd)
         val statusText = ProtocolDisplayText.commandStatus(this, state.status)
         binding.tvCommandState.text = "最近操作：$commandName · $statusText"
-        if (state.status != CommandStatus.IDLE || state.cmd != null) {
-            upsertCommandRow(state, commandName, statusText)
-            bindCommandRows()
-        }
         if (state.status != CommandStatus.IDLE && state.status != CommandStatus.SENDING) {
             val feedback = ProtocolDisplayText.commandFeedback(this, state.cmd, state.status)
             val detail = MissionCommandErrorDisplay.text(state.errorCode) ?: state.message
@@ -491,25 +505,7 @@ class MainActivity : AppCompatActivity() {
             "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}"
     }
 
-    private fun upsertCommandRow(state: CommandUiState, commandName: String, statusText: String) {
-        val key = state.cmdId ?: "${state.cmd}-${state.timestampMillis}"
-        val row = HomeCommandRow(
-            key = key,
-            time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(state.timestampMillis)),
-            command = state.cmd ?: commandName,
-            params = state.paramsSummary ?: "--",
-            status = statusText,
-            description = commandDescription(state)
-        )
-        val existing = commandHistory.indexOfFirst { it.key == key }
-        if (existing >= 0) {
-            commandHistory.removeAt(existing)
-        }
-        commandHistory.addFirst(row)
-        while (commandHistory.size > 4) commandHistory.removeLast()
-    }
-
-    private fun bindCommandRows() {
+    private fun bindCommandRows(items: List<StructuredLogEntity>) {
         val placeholders = listOf(
             com.robot.solar.R.id.tvCommandRow1,
             com.robot.solar.R.id.tvCommandRow2,
@@ -517,33 +513,13 @@ class MainActivity : AppCompatActivity() {
             com.robot.solar.R.id.tvCommandRow4
         )
         placeholders.forEachIndexed { index, id ->
-            findViewById<TextView?>(id)?.text = commandHistory.elementAtOrNull(index)?.let {
-                "${it.time}    ${it.command}    ${it.params}    ${it.status}    ${it.description}"
+            findViewById<TextView?>(id)?.text = items.getOrNull(index)?.let {
+                val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(it.timestampMillis))
+                val params = runCatching {
+                    JSONObject(it.detailJson.orEmpty()).optString("params").ifBlank { "--" }
+                }.getOrDefault("--")
+                "$time    ${it.action ?: "--"}    $params    ${it.result ?: "--"}    ${it.summary}"
             } ?: "--    --    --    --    --"
-        }
-    }
-
-    private fun commandDescription(state: CommandUiState): String {
-        val actionText = when (state.cmd) {
-            "start" -> "覆盖任务已被任务层受理"
-            "stop" -> "停止请求已被任务层受理"
-            "pause" -> "暂停请求已被任务层受理"
-            "resume" -> "恢复请求已被任务层受理"
-            "replan" -> "重新规划请求已被任务层受理"
-            "manual" -> "手动模式请求已被受理，等待状态确认"
-            "auto" -> "自动模式请求已被受理，等待状态确认"
-            "estop" -> "紧急停止执行"
-            "clear_estop" -> "解除急停请求已受理，等待安全状态恢复"
-            else -> "等待命令执行"
-        }
-        return when (state.status) {
-            CommandStatus.SENDING -> "命令已发送，等待回执"
-            CommandStatus.SUCCESS -> actionText
-            CommandStatus.FAILED ->
-                MissionCommandErrorDisplay.text(state.errorCode) ?: state.message ?: "设备未确认执行"
-            CommandStatus.TIMEOUT -> "回执等待超时"
-            CommandStatus.CONNECTION_LOST -> "连接中断，结果未知"
-            CommandStatus.IDLE -> "--"
         }
     }
 
@@ -567,14 +543,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             remoteUnavailableReason()
         }
+        bindStatus(viewModel.status.value)
     }
 
     private fun showPage(page: Page) {
         if (currentPage == Page.REMOTE && page != Page.REMOTE) {
             binding.directionPad.cancelInput()
-            viewModel.exitRemoteMode()
-        } else if (currentPage != Page.REMOTE && page == Page.REMOTE) {
-            viewModel.enterRemoteMode()
+            viewModel.leaveRemotePage()
         }
         currentPage = page
         binding.sectionHome.visibility = if (page == Page.HOME) View.VISIBLE else View.GONE
@@ -597,6 +572,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun manualControlStateText(): String = when {
+        currentAvailability.canRemote -> "可用"
+        viewModel.mqttConnected.value != true -> "MQTT 未连接"
+        viewModel.deviceOnline.value != true -> "设备离线"
+        viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许"
+        viewModel.missionState.value?.operationalMode != "manual" -> "未进入手动模式"
+        else -> "等待机器人确认"
+    }
+
     private fun selectNav(view: TextView, selected: Boolean) {
         view.setTextColor(getColor(if (selected) com.robot.solar.R.color.control_primary else com.robot.solar.R.color.control_nav_inactive))
         view.setTypeface(null, if (selected) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
@@ -609,12 +593,3 @@ private enum class Page {
     REMOTE,
     STATUS
 }
-
-private data class HomeCommandRow(
-    val key: String,
-    val time: String,
-    val command: String,
-    val params: String,
-    val status: String,
-    val description: String
-)

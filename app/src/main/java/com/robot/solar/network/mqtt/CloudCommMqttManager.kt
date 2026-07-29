@@ -9,6 +9,13 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.google.gson.Gson
 import com.robot.solar.BuildConfig
+import com.robot.solar.entity.LogCategory
+import com.robot.solar.entity.LogDirection
+import com.robot.solar.entity.LogSeverity
+import com.robot.solar.entity.LogSource
+import com.robot.solar.entity.StructuredLogDraft
+import com.robot.solar.logging.AppLogPolicy
+import com.robot.solar.logging.StatusLogSnapshot
 import com.robot.solar.map.PvMap
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.utils.LogUtils
@@ -51,6 +58,10 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     private var heartbeatJob: Job? = null
     private var mapJob: Job? = null
     private var lastHeartbeatMillis: Long? = null
+    @Volatile
+    private var loggedOnlineState: Boolean? = null
+    private var loggedStatusSnapshot: StatusLogSnapshot? = null
+    private var loggedMapSignature: String? = null
 
     private val _mqttConnected = MutableLiveData(false)
     val mqttConnected: LiveData<Boolean> = _mqttConnected
@@ -90,7 +101,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         override fun onLost(network: Network) {
             _mqttConnected.postValue(false)
             markRobotOffline(clearHeartbeat = true)
-            LogUtils.system("网络连接已丢失")
+            LogUtils.connection(
+                eventType = "network_lost",
+                summary = "网络连接已丢失",
+                result = "disconnected",
+                severity = LogSeverity.WARNING
+            )
         }
     }
 
@@ -106,7 +122,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         try {
             cm.registerNetworkCallback(request, networkCallback)
         } catch (_: Exception) {
-            LogUtils.system("注册网络监听失败")
+            LogUtils.connection(
+                eventType = "network_monitor_failed",
+                summary = "注册网络监听失败",
+                result = "failed",
+                severity = LogSeverity.WARNING
+            )
         }
     }
 
@@ -175,6 +196,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
      */
     private fun markRobotOffline(clearHeartbeat: Boolean) {
         if (clearHeartbeat) lastHeartbeatMillis = null
+        recordOnlineTransition(false)
+        loggedStatusSnapshot = null
         _deviceOnline.postValue(false)
         _batteryPercent.postValue(null)
         _status.postValue(null)
@@ -184,6 +207,9 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
     private fun clearDeviceState() {
         lastHeartbeatMillis = null
+        loggedOnlineState = null
+        loggedStatusSnapshot = null
+        loggedMapSignature = null
         _lastHeartbeatAt.postValue(null)
         _deviceOnline.postValue(null)
         _batteryPercent.postValue(null)
@@ -242,7 +268,11 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     private fun connectInternal(deviceId: String, reason: String) {
         val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         try {
-            LogUtils.system("MQTT 连接：$reason")
+            LogUtils.connection(
+                eventType = "mqtt_connecting",
+                summary = "正在连接 MQTT：$reason",
+                result = "connecting"
+            )
             client?.let { old ->
                 try {
                     if (old.isConnected) old.disconnect()
@@ -273,13 +303,23 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             mqttClient.setCallback(object : MqttCallbackExtended {
                 override fun connectComplete(reconnect: Boolean, serverURI: String?) {
                     _mqttConnected.postValue(true)
-                    LogUtils.system("MQTT 已连接")
+                    LogUtils.connection(
+                        eventType = "mqtt_connected",
+                        summary = if (reconnect) "MQTT 已重新连接" else "MQTT 已连接",
+                        result = "connected"
+                    )
                 }
 
                 override fun connectionLost(cause: Throwable?) {
                     _mqttConnected.postValue(false)
                     markRobotOffline(clearHeartbeat = true)
-                    LogUtils.system("设备连接已断开，正在尝试恢复")
+                    LogUtils.connection(
+                        eventType = "mqtt_disconnected",
+                        summary = "设备连接已断开，正在尝试恢复",
+                        result = "disconnected",
+                        severity = LogSeverity.WARNING,
+                        detailJson = cause?.message?.let { JSONObject().put("reason", it).toString() }
+                    )
                     scheduleReconnect()
                 }
 
@@ -295,7 +335,13 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             subscribeTopics(mqttClient, productType, deviceId)
         } catch (e: Exception) {
             _mqttConnected.postValue(false)
-            LogUtils.system("设备连接失败，请检查网络")
+            LogUtils.connection(
+                eventType = "mqtt_connect_failed",
+                summary = "设备连接失败，请检查网络",
+                result = "failed",
+                severity = LogSeverity.ERROR,
+                detailJson = e.message?.let { JSONObject().put("reason", it).toString() }
+            )
             scheduleReconnect()
         }
     }
@@ -309,7 +355,15 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             topicPose(productType, deviceId)
         )
         mqttClient.subscribe(topics, IntArray(topics.size) { COMMAND_QOS })
-        LogUtils.system("已订阅 device/$productType/$deviceId/* 上行主题")
+        LogUtils.connection(
+            eventType = "mqtt_subscribed",
+            summary = "已订阅设备上行主题",
+            result = "success",
+            detailJson = JSONObject()
+                .put("prefix", "device/$productType/$deviceId")
+                .put("topics", "heartbeat,status,cmd_ack,map,pose")
+                .toString()
+        )
     }
 
     private fun handleMessage(topic: String, payload: String) {
@@ -328,7 +382,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     } else {
                         markRobotOffline(clearHeartbeat = true)
                     }
-                    LogUtils.device(if (msg.online == true) "收到设备在线心跳" else "收到设备离线通知")
+                    recordOnlineTransition(msg.online == true)
                 }
                 topic.endsWith("/status") -> {
                     val msg = gson.fromJson(payload, StatusMessage::class.java)
@@ -351,7 +405,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         )
                     )
                     msg.batteryPercent?.let { _batteryPercent.postValue(it.toInt().coerceIn(0, 100)) }
-                    LogUtils.device("设备运行状态已更新")
+                    recordStatusChanges(topic, msg)
                 }
                 topic.endsWith("/cmd_ack") -> {
                     val ack = gson.fromJson(payload, CmdAckMessage::class.java)
@@ -362,46 +416,165 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         else -> "收到设备操作反馈"
                     }
                     _lastCmdFeedback.postValue(text)
-                    LogUtils.device("cmd_ack：$text")
                 }
                 topic.endsWith("/map") -> {
                     val map = gson.fromJson(payload, MapMessage::class.java)
                     handleMapMessage(map)
-                    LogUtils.device("收到地图更新通知，地图编号：${map.mapId ?: "--"}")
+                    val signature = "${map.mapId}:${map.mapVersion}:${map.checksum}"
+                    if (signature != loggedMapSignature) {
+                        loggedMapSignature = signature
+                        LogUtils.record(
+                            StructuredLogDraft(
+                                source = LogSource.ROBOT,
+                                category = LogCategory.MAP,
+                                eventType = "map_announced",
+                                direction = LogDirection.UPSTREAM,
+                                topic = topic,
+                                summary = "收到地图更新：${map.mapId ?: "--"}/v${map.mapVersion ?: "--"}",
+                                detailJson = JSONObject()
+                                    .put("mapId", map.mapId)
+                                    .put("mapVersion", map.mapVersion)
+                                    .put("mapName", map.mapName)
+                                    .toString()
+                            )
+                        )
+                    }
                 }
                 topic.endsWith("/pose") -> {
                     val pose = gson.fromJson(payload, PoseMessage::class.java)
                     _pose.postValue(pose)
-                    LogUtils.device("机器人地图位置已更新")
                 }
             }
         } catch (e: Exception) {
-            LogUtils.system("收到无法识别的设备消息")
+            protocolWarning(
+                eventType = "message_parse_failed",
+                summary = "收到无法识别的设备消息",
+                topic = topic,
+                detail = e.message
+            )
         }
     }
 
     private fun isValidEnvelope(obj: JSONObject, topic: String): Boolean {
         val version = obj.optString("version")
         if (version != PROTOCOL_VERSION) {
-            LogUtils.system("忽略 MQTT 消息：version 不匹配 topic=$topic version=$version")
+            protocolWarning(
+                "protocol_version_mismatch",
+                "忽略 MQTT 消息：协议版本不匹配",
+                topic,
+                "expected=$PROTOCOL_VERSION actual=$version"
+            )
             return false
         }
 
         val productType = obj.optString("productType")
         val expectedProductType = boundProductType
         if (!expectedProductType.isNullOrBlank() && productType != expectedProductType) {
-            LogUtils.system("忽略 MQTT 消息：productType 不匹配 expected=$expectedProductType actual=$productType")
+            protocolWarning(
+                "product_type_mismatch",
+                "忽略 MQTT 消息：设备类型不匹配",
+                topic,
+                "expected=$expectedProductType actual=$productType"
+            )
             return false
         }
 
         val deviceId = obj.optString("deviceId")
         val expectedDeviceId = boundDeviceId
         if (!expectedDeviceId.isNullOrBlank() && deviceId != expectedDeviceId) {
-            LogUtils.system("忽略 MQTT 消息：deviceId 不匹配 expected=$expectedDeviceId actual=$deviceId")
+            protocolWarning(
+                "device_id_mismatch",
+                "忽略 MQTT 消息：设备编号不匹配",
+                topic,
+                "expected=$expectedDeviceId actual=$deviceId"
+            )
             return false
         }
 
         return true
+    }
+
+    private fun recordOnlineTransition(online: Boolean) {
+        val summary = AppLogPolicy.heartbeatSummary(loggedOnlineState, online) ?: return
+        loggedOnlineState = online
+        LogUtils.record(
+            StructuredLogDraft(
+                source = LogSource.ROBOT,
+                category = LogCategory.CONNECTION,
+                eventType = if (online) "device_online" else "device_offline",
+                severity = if (online) LogSeverity.INFO else LogSeverity.WARNING,
+                direction = LogDirection.UPSTREAM,
+                topic = boundProductType?.let { product ->
+                    boundDeviceId?.let { device -> topicHeartbeat(product, device) }
+                },
+                result = if (online) "online" else "offline",
+                summary = summary,
+                dedupeKey = "device_online"
+            )
+        )
+    }
+
+    private fun recordStatusChanges(topic: String, msg: StatusMessage) {
+        val current = StatusLogSnapshot(
+            missionId = msg.missionId,
+            runState = msg.runState,
+            operationalMode = msg.operationalMode,
+            safetyState = msg.safetyState,
+            deviceStatus = msg.deviceStatus,
+            movementStatus = msg.movementStatus,
+            batteryPercent = msg.batteryPercent?.toInt(),
+            errorCode = msg.missionErrorCode,
+            errorMessage = msg.errorMessage
+        )
+        val details = JSONObject()
+            .put("missionId", msg.missionId)
+            .put("runState", msg.runState)
+            .put("operationalMode", msg.operationalMode)
+            .put("safetyState", msg.safetyState)
+            .put("phase", msg.phase)
+            .put("activeAction", msg.activeAction)
+            .put("errorCode", msg.missionErrorCode)
+            .put("errorMessage", msg.errorMessage)
+            .toString()
+        AppLogPolicy.statusChanges(loggedStatusSnapshot, current).forEach { change ->
+            LogUtils.record(
+                StructuredLogDraft(
+                    source = LogSource.ROBOT,
+                    category = change.category,
+                    eventType = change.eventType,
+                    severity = change.severity,
+                    direction = LogDirection.UPSTREAM,
+                    topic = topic,
+                    missionId = msg.missionId,
+                    action = msg.activeAction,
+                    result = change.result,
+                    summary = change.summary,
+                    detailJson = details
+                )
+            )
+        }
+        loggedStatusSnapshot = current
+    }
+
+    private fun protocolWarning(
+        eventType: String,
+        summary: String,
+        topic: String,
+        detail: String?
+    ) {
+        LogUtils.record(
+            StructuredLogDraft(
+                source = LogSource.MQTT,
+                category = LogCategory.SYSTEM,
+                eventType = eventType,
+                severity = LogSeverity.WARNING,
+                direction = LogDirection.UPSTREAM,
+                topic = topic,
+                summary = summary,
+                detailJson = detail?.let { JSONObject().put("reason", it).toString() },
+                dedupeKey = "$eventType:$topic"
+            )
+        )
     }
 
     private fun scheduleReconnect() {
@@ -439,7 +612,17 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         cmdId: String = newCmdId()
     ): PreparedCommand? {
         if (action !in SUPPORTED_CMDS) {
-            LogUtils.system("拒绝发送未知命令：$action")
+            LogUtils.record(
+                StructuredLogDraft(
+                    source = LogSource.APP,
+                    category = LogCategory.COMMAND,
+                    eventType = "unknown_command_rejected",
+                    severity = LogSeverity.WARNING,
+                    action = action,
+                    result = "rejected",
+                    summary = "拒绝发送未知命令：$action"
+                )
+            )
             return null
         }
         val deviceId = boundDeviceId ?: return null
@@ -518,10 +701,36 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                 result.fold(
                     onSuccess = { (path, pvMap) ->
                         saveCurrentMapRecord(map)
+                        LogUtils.record(
+                            StructuredLogDraft(
+                                source = LogSource.APP,
+                                category = LogCategory.MAP,
+                                eventType = "map_loaded",
+                                result = "success",
+                                summary = "地图 ${mapId}/v$version 加载完成",
+                                detailJson = JSONObject()
+                                    .put("mapId", mapId)
+                                    .put("mapVersion", version)
+                                    .put("cachePath", path)
+                                    .toString()
+                            )
+                        )
                         MapUiState(status = MapLoadStatus.READY, message = "地图已加载", map = map, cachePath = path, pvMap = pvMap)
                     },
                     onFailure = { error ->
-                        LogUtils.system("地图加载失败，请重新加载")
+                        LogUtils.record(
+                            StructuredLogDraft(
+                                source = LogSource.APP,
+                                category = LogCategory.MAP,
+                                eventType = "map_load_failed",
+                                severity = LogSeverity.ERROR,
+                                result = "failed",
+                                summary = "地图 ${mapId}/v$version 加载失败",
+                                detailJson = JSONObject()
+                                    .put("reason", error.message)
+                                    .toString()
+                            )
+                        )
                         previous?.copy(
                             status = if (previous.pvMap == null) MapLoadStatus.FAILED else previous.status,
                             message = error.message ?: "地图加载失败，继续显示当前地图",
@@ -619,7 +828,16 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             mqttClient.publish(topic, message)
             true
         } catch (e: Exception) {
-            LogUtils.system("操作发送失败，请检查设备连接")
+            LogUtils.connection(
+                eventType = "mqtt_publish_failed",
+                summary = "MQTT 消息发送失败",
+                result = "failed",
+                severity = LogSeverity.ERROR,
+                detailJson = JSONObject()
+                    .put("topic", topic)
+                    .put("reason", e.message)
+                    .toString()
+            )
             false
         }
     }
