@@ -1,8 +1,11 @@
 package com.robot.solar
 
 import com.google.gson.Gson
+import com.google.gson.JsonParser
+import com.robot.solar.network.mqtt.CommandPayloadFactory
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.network.mqtt.PoseMessage
+import com.robot.solar.network.mqtt.CoverageCommandParams
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -67,5 +70,99 @@ class MqttModelsParseTest {
         assertEquals(16L, pose.cellId)
         assertEquals(4, pose.innerCol)
         assertEquals(0, pose.headingCode)
+    }
+
+    @Test
+    fun parseStatus_readsMissionCommandStateSeparatelyFromAck() {
+        val status = gson.fromJson(
+            """
+            {
+              "version": "1.0",
+              "deviceId": "crawler_00000001",
+              "productType": "crawler",
+              "missionId": "mission-42",
+              "taskKind": "coverage",
+              "runState": "running",
+              "operationalMode": "auto",
+              "safetyState": "normal",
+              "phase": "executing",
+              "waypointIndex": 3,
+              "waypointCount": 9,
+              "errorCode": 0,
+              "errorRetryable": false
+            }
+            """.trimIndent(),
+            StatusMessage::class.java
+        )
+
+        assertEquals("mission-42", status.missionId)
+        assertEquals("running", status.runState)
+        assertEquals("auto", status.operationalMode)
+        assertEquals("normal", status.safetyState)
+        assertEquals(3, status.waypointIndex)
+        assertEquals(0, status.missionErrorCode)
+    }
+
+    @Test
+    fun coverageCommandParams_useCurrentPoseAndUniqueTargetBlocks() {
+        val params = CoverageCommandParams(
+            mapId = 7,
+            mapVersion = 3,
+            useCurrentPose = true,
+            targetBlockIds = listOf(2, 4),
+            globalPlan = true
+        )
+        val json = gson.toJson(params)
+
+        assertEquals(
+            """{"mapId":7,"mapVersion":3,"useCurrentPose":true,"targetBlockIds":[2,4],"globalPlan":true}""",
+            json
+        )
+    }
+
+    @Test
+    fun preparedCoverageCommand_matchesRobotContractAndIsStableForRetry() {
+        val coverage = CoverageCommandParams(
+            mapId = 7,
+            mapVersion = 3,
+            useCurrentPose = true,
+            targetBlockIds = listOf(2, 4),
+            globalPlan = true
+        )
+        val prepared = CommandPayloadFactory.create(
+            version = "1.0",
+            cmdId = "cmd_start_000001",
+            deviceId = "crawler_00000001",
+            productType = "crawler",
+            timestamp = "2026-07-26T08:30:00.123Z",
+            cmd = "start",
+            params = mapOf("taskKind" to "coverage", "coverage" to coverage),
+            gson = gson
+        )
+        val payload = JsonParser.parseString(prepared.payload).asJsonObject
+
+        assertEquals("cmd_start_000001", prepared.cmdId)
+        assertEquals("start", payload["cmd"].asString)
+        assertEquals("coverage", payload["params"].asJsonObject["taskKind"].asString)
+        assertEquals(7L, payload["params"].asJsonObject["coverage"].asJsonObject["mapId"].asLong)
+        assertEquals(true, payload["params"].asJsonObject["coverage"].asJsonObject["useCurrentPose"].asBoolean)
+        assertEquals(prepared.payload, prepared.payload)
+    }
+
+    @Test
+    fun targetMissionCommand_containsLatestMissionId() {
+        val prepared = CommandPayloadFactory.create(
+            version = "1.0",
+            cmdId = "cmd_pause_000001",
+            deviceId = "crawler_00000001",
+            productType = "crawler",
+            timestamp = "2026-07-26T08:30:00.123Z",
+            cmd = "pause",
+            params = mapOf("targetMissionId" to "mission-42"),
+            gson = gson
+        )
+        val params = JsonParser.parseString(prepared.payload).asJsonObject["params"].asJsonObject
+
+        assertEquals("mission-42", params["targetMissionId"].asString)
     }
 }

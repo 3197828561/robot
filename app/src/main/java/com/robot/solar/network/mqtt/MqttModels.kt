@@ -1,5 +1,8 @@
 package com.robot.solar.network.mqtt
 
+import com.google.gson.Gson
+import com.google.gson.annotations.SerializedName
+
 /** 第二版 App 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
 data class HeartbeatMessage(
     val version: String?,
@@ -29,7 +32,20 @@ data class StatusMessage(
     val cleanedRows: Int?,
     val pressureKpa: Double?,
     val antiFallLeftM: Double?,
-    val antiFallRightM: Double?
+    val antiFallRightM: Double?,
+    val missionId: String?,
+    val taskKind: String?,
+    val runState: String?,
+    val operationalMode: String?,
+    val safetyState: String?,
+    val phase: String?,
+    val activeAction: String?,
+    val waypointIndex: Int?,
+    val waypointCount: Int?,
+    @SerializedName("errorCode") val missionErrorCode: Int?,
+    val errorRetryable: Boolean?,
+    val errorSource: String?,
+    val errorMessage: String?
 )
 
 data class CmdAckMessage(
@@ -87,6 +103,78 @@ data class CmdMessage(
     val timestamp: String,
     val cmd: String,
     val params: Map<String, Any?> = emptyMap()
+)
+
+data class PreparedCommand(
+    val cmdId: String,
+    val cmd: String,
+    val payload: String
+)
+
+data class CommandPayload(
+    val version: String,
+    val cmdId: String,
+    val deviceId: String,
+    val productType: String,
+    val timestamp: String,
+    val cmd: String,
+    val params: Any
+)
+
+object CommandPayloadFactory {
+    fun create(
+        version: String,
+        cmdId: String,
+        deviceId: String,
+        productType: String,
+        timestamp: String,
+        cmd: String,
+        params: Any,
+        gson: Gson = Gson()
+    ): PreparedCommand {
+        require(cmdId.isNotBlank()) { "cmdId must not be blank" }
+        require(deviceId.isNotBlank()) { "deviceId must not be blank" }
+        require(productType.isNotBlank()) { "productType must not be blank" }
+        require(cmd.isNotBlank()) { "cmd must not be blank" }
+        val payload = gson.toJson(
+            CommandPayload(version, cmdId, deviceId, productType, timestamp, cmd, params)
+        )
+        return PreparedCommand(cmdId = cmdId, cmd = cmd, payload = payload)
+    }
+}
+
+data class CoverageStart(
+    val blockId: Long,
+    val cellRow: Int,
+    val cellCol: Int,
+    val innerRow: Int,
+    val innerCol: Int,
+    val heading: Int
+)
+
+data class CoverageCommandParams(
+    val mapId: Long,
+    val mapVersion: Int,
+    val useCurrentPose: Boolean,
+    val start: CoverageStart? = null,
+    val targetBlockIds: List<Long>,
+    val globalPlan: Boolean = true
+)
+
+data class MissionState(
+    val missionId: String? = null,
+    val taskKind: String? = null,
+    val runState: String? = null,
+    val operationalMode: String? = null,
+    val safetyState: String? = null,
+    val phase: String? = null,
+    val activeAction: String? = null,
+    val waypointIndex: Int? = null,
+    val waypointCount: Int? = null,
+    val errorCode: Int? = null,
+    val errorRetryable: Boolean? = null,
+    val errorSource: String? = null,
+    val errorMessage: String? = null
 )
 
 data class RemoteMessage(

@@ -132,8 +132,21 @@ function Publish-Status {
     $payload["pressureKpa"] = 102.4
     $payload["antiFallLeftM"] = 0.85
     $payload["antiFallRightM"] = 0.82
+    $payload["missionId"] = if ($script:MissionId) { $script:MissionId } else { $null }
+    $payload["taskKind"] = if ($script:TaskKind) { $script:TaskKind } else { $null }
+    $payload["runState"] = $script:RunState
+    $payload["operationalMode"] = $script:OperationalMode
+    $payload["safetyState"] = $script:SafetyState
+    $payload["phase"] = $script:MissionPhase
+    $payload["activeAction"] = $script:ActiveAction
+    $payload["waypointIndex"] = $script:WaypointIndex
+    $payload["waypointCount"] = $script:WaypointCount
+    $payload["errorCode"] = $script:MissionErrorCode
+    $payload["errorRetryable"] = $script:MissionErrorRetryable
+    $payload["errorSource"] = $script:MissionErrorSource
+    $payload["errorMessage"] = $script:MissionErrorMessage
     Invoke-MqttPub "$TopicPrefix/status" (ConvertTo-CompactJson $payload)
-    Write-Host "[UP] status work=$WorkStatus movement=$MovementStatus device=$DeviceStatus speed=$Linear/$Angular"
+    Write-Host "[UP] status run=$script:RunState mode=$script:OperationalMode safety=$script:SafetyState mission=$script:MissionId"
 }
 
 function Publish-Pose {
@@ -188,9 +201,27 @@ function Publish-MapNotice {
 }
 
 function Apply-Cmd {
-    param([string]$Cmd)
+    param(
+        [string]$Cmd,
+        [object]$Params
+    )
+    $targetMissionId = if ($Params -and $Params.targetMissionId) { [string]$Params.targetMissionId } else { "" }
+    if ($Cmd -in @("stop", "pause", "resume", "replan")) {
+        if (!$script:MissionId -or $targetMissionId -ne $script:MissionId) {
+            return @{ Success = $false; ErrorCode = "MISSION_NOT_FOUND" }
+        }
+    }
     switch ($Cmd) {
         "start" {
+            if (!$Params -or [string]$Params.taskKind -ne "coverage" -or !$Params.coverage) {
+                return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+            }
+            $script:MissionId = "mission-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
+            $script:TaskKind = "coverage"
+            $script:RunState = "running"
+            $script:MissionPhase = "executing"
+            $script:OperationalMode = "auto"
+            $script:SafetyState = "normal"
             $script:WorkStatus = "running"
             $script:MovementStatus = "moving"
             $script:DeviceStatus = "normal"
@@ -201,14 +232,63 @@ function Apply-Cmd {
             $script:HeadingName = "block_u_positive"
         }
         "stop" {
+            $script:RunState = "canceled"
+            $script:MissionPhase = "none"
             $script:WorkStatus = "stopped"
             $script:MovementStatus = "stopped"
             $script:DeviceStatus = "normal"
+            $script:ControlMode = "auto"
+            $script:LinearSpeed = 0
+            $script:AngularSpeed = 0
+        }
+        "pause" {
+            if ($script:RunState -notin @("starting", "running")) {
+                return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
+            }
+            $script:RunState = "paused"
+            $script:MovementStatus = "stopped"
+            $script:LinearSpeed = 0
+            $script:AngularSpeed = 0
+        }
+        "resume" {
+            if ($script:RunState -ne "paused") {
+                return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
+            }
+            $script:RunState = "running"
+            $script:MissionPhase = "executing"
+            $script:MovementStatus = "moving"
+            $script:LinearSpeed = 12
+        }
+        "replan" {
+            if ($script:TaskKind -ne "coverage" -or $script:RunState -notin @("starting", "running", "paused")) {
+                return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
+            }
+            $script:MissionPhase = "planning"
+        }
+        "manual" {
+            if ($script:SafetyState -ne "normal") {
+                return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
+            }
+            if ($script:RunState -in @("starting", "running", "paused")) {
+                $script:RunState = "canceled"
+                $script:MissionPhase = "none"
+            }
+            $script:OperationalMode = "manual"
             $script:ControlMode = "manual"
+            $script:WorkStatus = "stopped"
+            $script:MovementStatus = "stopped"
+            $script:LinearSpeed = 0
+            $script:AngularSpeed = 0
+        }
+        "auto" {
+            $script:OperationalMode = "auto"
+            $script:ControlMode = "auto"
+            $script:MovementStatus = "stopped"
             $script:LinearSpeed = 0
             $script:AngularSpeed = 0
         }
         "estop" {
+            $script:SafetyState = "estop"
             $script:WorkStatus = "estopped"
             $script:MovementStatus = "stopped"
             $script:DeviceStatus = "normal"
@@ -217,14 +297,20 @@ function Apply-Cmd {
             $script:AngularSpeed = 0
         }
         "clear_estop" {
+            if ($script:SafetyState -ne "estop") {
+                return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
+            }
+            $script:SafetyState = "clearing_estop"
+            $script:ClearEstopAt = (Get-Date).AddSeconds(1)
             $script:WorkStatus = "stopped"
             $script:MovementStatus = "stopped"
             $script:DeviceStatus = "normal"
-            $script:ControlMode = "manual"
+            $script:ControlMode = $script:OperationalMode
             $script:LinearSpeed = 0
             $script:AngularSpeed = 0
         }
     }
+    return @{ Success = $true; ErrorCode = "" }
 }
 
 function Handle-DownlinkLine {
@@ -245,10 +331,34 @@ function Handle-DownlinkLine {
             $cmd = [string]$msg.cmd
             if (!$cmdId) { $cmdId = "missing_cmd_id" }
             if (!$cmd) { $cmd = "unknown" }
-            if ($cmd -in @("start", "stop", "estop", "clear_estop")) {
-                Apply-Cmd $cmd
+            if ($script:ProcessedCommands.ContainsKey($cmdId)) {
+                $cached = $script:ProcessedCommands[$cmdId]
                 if (!$NoAutoAck) {
-                    Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "success" -Message "$cmd accepted by simulator"
+                    if ($cached.Payload -ne $json) {
+                        Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "failed" -Message "cmdId reused with different payload" -ErrorCode "MISSION_INVALID_REQUEST"
+                    } else {
+                        Publish-CmdAck -CmdId $cmdId -Cmd $cached.Cmd -AckStatus $cached.AckStatus -Message $cached.Message -ErrorCode $cached.ErrorCode
+                    }
+                }
+                return
+            }
+            if ($cmd -in @("start", "stop", "pause", "resume", "replan", "manual", "auto", "estop", "clear_estop")) {
+                $result = Apply-Cmd -Cmd $cmd -Params $msg.params
+                $ackStatus = if ($result.Success) { "success" } else { "failed" }
+                $ackMessage = if ($result.Success) { "accepted" } else { "rejected" }
+                $script:ProcessedCommands[$cmdId] = @{
+                    Payload = $json
+                    Cmd = $cmd
+                    AckStatus = $ackStatus
+                    Message = $ackMessage
+                    ErrorCode = $result.ErrorCode
+                }
+                if (!$NoAutoAck) {
+                    if ($result.Success) {
+                        Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "success" -Message "accepted"
+                    } else {
+                        Publish-CmdAck -CmdId $cmdId -Cmd $cmd -AckStatus "failed" -Message "rejected" -ErrorCode $result.ErrorCode
+                    }
                 }
                 Publish-Status
                 Publish-Pose
@@ -258,6 +368,10 @@ function Handle-DownlinkLine {
                 }
             }
         } elseif ($topic.EndsWith("/remote")) {
+            if ($script:OperationalMode -ne "manual" -or $script:SafetyState -ne "normal") {
+                Write-Host "[DROP] remote requires operationalMode=manual and safetyState=normal"
+                return
+            }
             $script:LinearSpeed = [double]$msg.linearSpeedCms
             $script:AngularSpeed = [double]$msg.angularSpeedRadps
             $moving = [Math]::Abs($script:LinearSpeed) -gt 0.01 -or [Math]::Abs($script:AngularSpeed) -gt 0.01
@@ -382,6 +496,11 @@ function Run-AutoRobot {
                 Handle-DownlinkLine $line
             }
             $now = Get-Date
+            if ($script:ClearEstopAt -and $now -ge $script:ClearEstopAt) {
+                $script:SafetyState = "normal"
+                $script:ClearEstopAt = $null
+                Publish-Status
+            }
             if (($now - $lastHeartbeat).TotalMilliseconds -ge 1000) {
                 Publish-Heartbeat $true
                 $lastHeartbeat = $now
@@ -492,7 +611,22 @@ $TopicPrefix = "device/$ProductType/$DeviceId"
 $script:WorkStatus = "stopped"
 $script:MovementStatus = "stopped"
 $script:DeviceStatus = "normal"
-$script:ControlMode = "manual"
+$script:MissionId = ""
+$script:TaskKind = ""
+$script:RunState = "idle"
+$script:OperationalMode = "auto"
+$script:SafetyState = "normal"
+$script:MissionPhase = "none"
+$script:ActiveAction = ""
+$script:WaypointIndex = 0
+$script:WaypointCount = 0
+$script:MissionErrorCode = 0
+$script:MissionErrorRetryable = $false
+$script:MissionErrorSource = ""
+$script:MissionErrorMessage = ""
+$script:ClearEstopAt = $null
+$script:ProcessedCommands = @{}
+$script:ControlMode = "auto"
 $script:Battery = 88.0
 $script:LinearSpeed = 0.0
 $script:AngularSpeed = 0.0

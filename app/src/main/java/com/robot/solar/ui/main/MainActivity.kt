@@ -133,8 +133,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindControls() {
-        binding.btnStart.setOnClickListener { viewModel.sendCmd("开始运行", "start") }
-        binding.btnStopRun.setOnClickListener { viewModel.sendCmd("停止运行", "stop") }
+        binding.btnStart.setOnClickListener { viewModel.startCoverage() }
+        binding.btnStopRun.setOnClickListener { viewModel.sendMissionCommand("停止任务", "stop") }
+        binding.btnPause.setOnClickListener { viewModel.sendMissionCommand("暂停任务", "pause") }
+        binding.btnResume.setOnClickListener { viewModel.sendMissionCommand("恢复任务", "resume") }
+        binding.btnReplan.setOnClickListener { viewModel.sendMissionCommand("重新规划", "replan") }
         binding.btnEmergency.setOnClickListener { viewModel.sendCmd("紧急停止", "estop") }
         binding.btnClearEstop.setOnClickListener { viewModel.sendCmd("解除急停", "clear_estop") }
         binding.btnRemoteEmergency.setOnClickListener {
@@ -201,6 +204,15 @@ class MainActivity : AppCompatActivity() {
                 "角速度：--",
                 "设备状态：--",
                 "运动状态：--",
+                "任务编号：${viewModel.missionState.value?.missionId ?: "--"}",
+                "任务类型：${viewModel.missionState.value?.taskKind ?: "--"}",
+                "任务状态：${missionStatusText(
+                    viewModel.missionState.value?.runState,
+                    viewModel.missionState.value?.safetyState
+                )}",
+                "运行模式：${viewModel.missionState.value?.operationalMode ?: "--"}",
+                "安全状态：${viewModel.missionState.value?.safetyState ?: "--"}",
+                "任务阶段：${viewModel.missionState.value?.phase ?: "--"}",
                 "地图编号：${currentMapState.map?.mapId ?: "--"}",
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
@@ -220,6 +232,14 @@ class MainActivity : AppCompatActivity() {
                 "角速度：${status.angularSpeedRadps?.let { String.format(Locale.getDefault(), "%.2f rad/s", it) } ?: "--"}",
                 "设备状态：${ProtocolDisplayText.deviceStatus(this, status.deviceStatus)}",
                 "运动状态：${ProtocolDisplayText.movementStatus(this, status.movementStatus)}",
+                "任务编号：${status.missionId ?: "--"}",
+                "任务类型：${status.taskKind ?: "--"}",
+                "任务状态：${missionStatusText(status.runState, status.safetyState)}",
+                "运行模式：${status.operationalMode ?: "--"}",
+                "安全状态：${status.safetyState ?: "--"}",
+                "任务阶段：${status.phase ?: "--"}",
+                "任务进度：${status.waypointIndex?.let { index -> "${index}/${status.waypointCount ?: "--"}" } ?: "--"}",
+                "任务错误：${status.errorMessage?.takeIf { it.isNotBlank() } ?: status.missionErrorCode ?: "--"}",
                 "地图编号：${currentMapState.map?.mapId ?: "--"}",
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
@@ -297,7 +317,13 @@ class MainActivity : AppCompatActivity() {
             bindCommandRows()
         }
         if (state.status != CommandStatus.IDLE && state.status != CommandStatus.SENDING) {
-            Toast.makeText(this, ProtocolDisplayText.commandFeedback(this, state.cmd, state.status), Toast.LENGTH_LONG).show()
+            val feedback = ProtocolDisplayText.commandFeedback(this, state.cmd, state.status)
+            val detail = state.errorCode ?: state.message
+            Toast.makeText(
+                this,
+                if (detail.isNullOrBlank()) feedback else "$feedback（$detail）",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
@@ -358,10 +384,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun commandDescription(cmd: String?, status: CommandStatus): String {
         val actionText = when (cmd) {
-            "start" -> "机器人开始自动运行"
-            "stop" -> "机器人停止运行"
+            "start" -> "覆盖任务已被任务层受理"
+            "stop" -> "停止请求已被任务层受理"
+            "pause" -> "暂停请求已被任务层受理"
+            "resume" -> "恢复请求已被任务层受理"
+            "replan" -> "重新规划请求已被任务层受理"
+            "manual" -> "手动模式请求已被受理，等待状态确认"
+            "auto" -> "自动模式请求已被受理，等待状态确认"
             "estop" -> "紧急停止执行"
-            "clear_estop" -> "已解除急停状态"
+            "clear_estop" -> "解除急停请求已受理，等待安全状态恢复"
             else -> "等待命令执行"
         }
         return when (status) {
@@ -378,6 +409,9 @@ class MainActivity : AppCompatActivity() {
         currentAvailability = availability
         binding.btnStart.isEnabled = availability.canStart
         binding.btnStopRun.isEnabled = availability.canStop
+        binding.btnPause.isEnabled = availability.canPause
+        binding.btnResume.isEnabled = availability.canResume
+        binding.btnReplan.isEnabled = availability.canReplan
         binding.btnEmergency.isEnabled = availability.canEstop
         binding.btnRemoteEmergency.isEnabled = availability.canEstop
         binding.btnClearEstop.isEnabled = availability.canClearEstop
@@ -393,7 +427,9 @@ class MainActivity : AppCompatActivity() {
     private fun showPage(page: Page) {
         if (currentPage == Page.REMOTE && page != Page.REMOTE) {
             binding.directionPad.cancelInput()
-            viewModel.stopRemote(sendZero = true)
+            viewModel.exitRemoteMode()
+        } else if (currentPage != Page.REMOTE && page == Page.REMOTE) {
+            viewModel.enterRemoteMode()
         }
         currentPage = page
         binding.sectionHome.visibility = if (page == Page.HOME) View.VISIBLE else View.GONE
@@ -410,7 +446,29 @@ class MainActivity : AppCompatActivity() {
         return when {
             viewModel.mqttConnected.value != true -> "MQTT 未连接，手动控制不可用"
             viewModel.deviceOnline.value != true -> "设备离线，手动控制不可用"
+            viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许手动控制"
+            viewModel.missionState.value?.operationalMode != "manual" -> "正在等待机器人切换到手动模式"
             else -> "当前条件不满足"
+        }
+    }
+
+    private fun missionStatusText(runState: String?, safetyState: String?): String {
+        return when (safetyState) {
+            "estop" -> "急停"
+            "clearing_estop" -> "解除急停中"
+            "low_battery" -> "低电量"
+            "fault" -> "故障"
+            else -> when (runState) {
+                "idle" -> "空闲"
+                "starting" -> "启动中"
+                "running" -> "运行中"
+                "paused" -> "已暂停"
+                "succeeded" -> "已完成"
+                "failed" -> "失败"
+                "canceled" -> "已取消"
+                null -> "--"
+                else -> "未知"
+            }
         }
     }
 

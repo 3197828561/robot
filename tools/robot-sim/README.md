@@ -85,6 +85,20 @@ cmd
 remote
 ```
 
+`auto` 模式已同步任务命令接口，支持：
+
+```text
+start stop pause resume replan manual auto estop clear_estop
+```
+
+其中：
+
+- `start` 校验 `taskKind=coverage` 和 `coverage` 参数；
+- `stop/pause/resume/replan` 校验 `targetMissionId`；
+- `cmd_ack=success` 仅表示命令已受理，最终结果由后续 `status.runState` 表示；
+- `remote` 仅在 `operationalMode=manual` 且 `safetyState=normal` 时处理；
+- `status` 会上报 `missionId/runState/operationalMode/safetyState/phase` 等任务字段。
+
 传入地图 URL 时，还会发布 `map` 通知：
 
 ```powershell
