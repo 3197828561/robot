@@ -280,52 +280,85 @@
                                 android:textSize="17sp"
                                 android:textStyle="bold" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnStart"
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="12dp"
-                                android:text="开始运行"
-                                android:textColor="@color/solar_on_primary"
-                                app:backgroundTint="@color/control_primary"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnStopRun"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="停止运行"
-                                android:textColor="@color/solar_on_primary"
-                                app:backgroundTint="@color/control_warning"
-                                app:cornerRadius="8dp" />
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnStart"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="开始运行"
+                                    android:textColor="@color/solar_on_primary"
+                                    app:backgroundTint="@color/control_primary"
+                                    app:cornerRadius="8dp" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnPause"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="暂停任务"
-                                app:cornerRadius="8dp" />
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnStopRun"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="停止运行"
+                                    android:textColor="@color/solar_on_primary"
+                                    app:backgroundTint="@color/control_warning"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnResume"
-                                style="?attr/materialButtonOutlinedStyle"
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="恢复任务"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnReplan"
-                                style="?attr/materialButtonOutlinedStyle"
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnPause"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="暂停任务"
+                                    app:cornerRadius="8dp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnResume"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="恢复任务"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
+
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="重新规划"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnReplan"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="重新规划"
+                                    app:cornerRadius="8dp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnClearEstop"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="解除急停"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnEmergency"
@@ -336,15 +369,6 @@
                                 android:textColor="@color/solar_on_primary"
                                 android:textStyle="bold"
                                 app:backgroundTint="@color/control_danger"
-                                app:cornerRadius="8dp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnClearEstop"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="解除急停"
                                 app:cornerRadius="8dp" />
 
                             <TextView
@@ -730,16 +754,22 @@
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
-                    <TextView
-                        android:id="@+id/tvRemoteStatus"
+                    <androidx.core.widget.NestedScrollView
                         android:layout_width="match_parent"
                         android:layout_height="0dp"
                         android:layout_marginTop="16dp"
                         android:layout_weight="1"
-                        android:lineSpacingExtra="7dp"
-                        android:textColor="@color/control_text"
-                        android:textSize="15sp"
-                        tools:text="在线状态：--" />
+                        android:fillViewport="true">
+
+                        <TextView
+                            android:id="@+id/tvRemoteStatus"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:lineSpacingExtra="7dp"
+                            android:textColor="@color/control_text"
+                            android:textSize="15sp"
+                            tools:text="在线状态：--" />
+                    </androidx.core.widget.NestedScrollView>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRemoteStop"
@@ -765,10 +795,11 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <FrameLayout
+        <androidx.core.widget.NestedScrollView
             android:id="@+id/sectionStatus"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:fillViewport="true"
             android:padding="12dp"
             android:visibility="gone">
 
@@ -790,7 +821,7 @@
                     android:textSize="15sp"
                     tools:text="设备名称：--" />
             </com.google.android.material.card.MaterialCardView>
-        </FrameLayout>
+        </androidx.core.widget.NestedScrollView>
     </FrameLayout>
 
     <LinearLayout
