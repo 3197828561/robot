@@ -13,6 +13,7 @@ import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageCommandParams
+import com.robot.solar.network.mqtt.CoverageTaskSelection
 import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.MissionState
 import com.robot.solar.network.mqtt.PoseMessage
@@ -43,6 +44,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
     private val _remoteModeAccepted = MutableLiveData(false)
+    private val _awaitingStartStatus = MutableLiveData(false)
+    val awaitingStartStatus: LiveData<Boolean> = _awaitingStartStatus
+    private val _awaitingClearEstopStatus = MutableLiveData(false)
+    val awaitingClearEstopStatus: LiveData<Boolean> = _awaitingClearEstopStatus
+    private val _retryAvailable = MutableLiveData(false)
+    private val _commandInFlight = MutableLiveData(false)
 
     val controlsEnabled = MediatorLiveData<ControlAvailability>().apply {
         fun refresh() {
@@ -65,6 +72,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         addSource(_remoteModeAccepted) {
             refresh()
         }
+        addSource(_awaitingStartStatus) {
+            refresh()
+        }
+        addSource(_awaitingClearEstopStatus) {
+            refresh()
+        }
+        addSource(_retryAvailable) {
+            refresh()
+        }
+        addSource(_commandInFlight) {
+            refresh()
+        }
     }
 
     val deviceDisplayName: String?
@@ -76,16 +95,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private var lastCommandUptime: Long = 0L
     private var waitingCmdId: String? = null
+    private var waitingCommand: PreparedCommand? = null
     private var commandTimeoutJob: Job? = null
     private var lastPreparedCommand: PreparedCommand? = null
     private var lastCommandLabel: String? = null
+    private var lastCommandParamsSummary: String? = null
+    private var pendingCommandParamsSummary: String? = null
     private var pendingExitToAuto = false
+    private var lastMissionErrorSignature: String? = null
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
     private val cmdAckObserver = Observer<CmdAckMessage?> { handleCmdAck(it) }
     private val mqttConnectedObserver = Observer<Boolean> { connected ->
         if (connected != true) {
             _remoteModeAccepted.postValue(false)
+            _awaitingStartStatus.postValue(false)
+            _awaitingClearEstopStatus.postValue(false)
             stopRemote(sendZero = false)
             if (waitingCmdId != null) {
                 finishPendingCommand(CommandStatus.CONNECTION_LOST, "MQTT 连接已断开", null)
@@ -93,6 +118,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private val missionStateObserver = Observer<MissionState> { state ->
+        if (
+            !state.missionId.isNullOrBlank() &&
+            state.runState in setOf("starting", "running", "paused", "succeeded", "failed", "canceled")
+        ) {
+            _awaitingStartStatus.postValue(false)
+        }
+        if (state.safetyState == "normal") {
+            _awaitingClearEstopStatus.postValue(false)
+        }
+        val errorSignature = listOf(
+            state.missionId,
+            state.errorCode,
+            state.errorRetryable,
+            state.errorSource,
+            state.errorMessage
+        ).joinToString("|")
+        if (
+            errorSignature != lastMissionErrorSignature &&
+            (state.errorCode != null && state.errorCode != 0 || !state.errorMessage.isNullOrBlank())
+        ) {
+            LogUtils.device(
+                "任务错误：code=${state.errorCode ?: "--"} " +
+                    "retryable=${state.errorRetryable ?: "--"} " +
+                    "source=${state.errorSource.orEmpty()} ${state.errorMessage.orEmpty()}"
+            )
+        }
+        lastMissionErrorSignature = errorSignature
         if (state.operationalMode != "manual" || state.safetyState != "normal") {
             stopRemote(sendZero = true)
         }
@@ -156,7 +208,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun startCoverage() {
+    fun startCoverage(selection: CoverageTaskSelection) {
         val map = mapState.value?.pvMap
         if (map == null) {
             rejectCommand("start", "请先加载有效地图")
@@ -166,22 +218,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand("start", "地图编号或版本超出协议范围")
             return
         }
-        val targets = map.blocks.filter { it.cleanable && it.blockId > 0 }.map { it.blockId }.distinct()
+        val targets = selection.targetBlockIds
         if (targets.isEmpty()) {
-            rejectCommand("start", "当前地图没有可清洁区域")
+            rejectCommand("start", "至少选择一个目标区域")
             return
+        }
+        if (targets.any { it <= 0 } || targets.size != targets.distinct().size) {
+            rejectCommand("start", "目标区域编号必须大于 0 且不能重复")
+            return
+        }
+        if (targets.any { map.blocksById[it]?.cleanable != true }) {
+            rejectCommand("start", "目标区域不存在或不可清洁")
+            return
+        }
+        val start = selection.start
+        if (!selection.useCurrentPose) {
+            if (start == null) {
+                rejectCommand("start", "未使用当前位置时必须填写起点")
+                return
+            }
+            val block = map.blocksById[start.blockId]
+            val cell = map.cellsByIndex[Triple(start.blockId, start.cellRow, start.cellCol)]
+            if (block == null || cell == null) {
+                rejectCommand("start", "起点 block/cell 不存在")
+                return
+            }
+            if (
+                start.innerRow !in 0 until map.cellModel.innerRows ||
+                start.innerCol !in 0 until map.cellModel.innerCols
+            ) {
+                rejectCommand("start", "起点内部行列超出地图范围")
+                return
+            }
+            if (start.heading !in 0..3) {
+                rejectCommand("start", "起点 heading 必须为 0..3")
+                return
+            }
         }
         val coverage = CoverageCommandParams(
             mapId = map.mapId,
             mapVersion = map.version,
-            useCurrentPose = true,
+            useCurrentPose = selection.useCurrentPose,
+            start = if (selection.useCurrentPose) null else start,
             targetBlockIds = targets,
-            globalPlan = true
+            globalPlan = selection.globalPlan
         )
+        val summary = buildString {
+            append("map=${map.mapId}/v${map.version}")
+            append(", currentPose=${selection.useCurrentPose}")
+            if (!selection.useCurrentPose && start != null) {
+                append(", start=${start.blockId}:${start.cellRow},${start.cellCol}/${start.innerRow},${start.innerCol}/h${start.heading}")
+            }
+            append(", targets=${targets.joinToString(",")}")
+            append(", global=${selection.globalPlan}")
+        }
         sendPreparedCommand(
             label = "开始覆盖任务",
             action = "start",
-            params = mapOf("taskKind" to "coverage", "coverage" to coverage)
+            params = mapOf("taskKind" to "coverage", "coverage" to coverage),
+            paramsSummary = summary
         )
     }
 
@@ -191,7 +286,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand(action, "当前没有可操作的任务")
             return
         }
-        sendPreparedCommand(label, action, mapOf("targetMissionId" to missionId))
+        sendPreparedCommand(
+            label,
+            action,
+            mapOf("targetMissionId" to missionId),
+            "targetMissionId=$missionId"
+        )
     }
 
     fun sendCmd(label: String, action: String) {
@@ -225,17 +325,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun retryLastCommand() {
         val command = lastPreparedCommand ?: return
         val label = lastCommandLabel ?: command.cmd
-        if (waitingCmdId != null || mqttConnected.value != true || deviceOnline.value != true) return
-        publishPreparedCommand(label, command)
+        if (_retryAvailable.value != true) {
+            rejectCommand(command.cmd, "当前没有可重试的失败命令")
+            return
+        }
+        if (waitingCmdId != null || mqttConnected.value != true || deviceOnline.value != true) {
+            rejectCommand(command.cmd, "设备未就绪，暂时不能重试")
+            return
+        }
+        pendingCommandParamsSummary = lastCommandParamsSummary
+        _retryAvailable.value = false
+        publishPreparedCommand(label, command, lastCommandParamsSummary)
     }
 
     private fun sendPreparedCommand(
         label: String,
         action: String,
-        params: Any = emptyMap<String, Any?>()
+        params: Any = emptyMap<String, Any?>(),
+        paramsSummary: String = "{}"
     ) {
-        if (!debounce()) return
-        if (!canSendCommand(action)) return
+        if (!debounce()) {
+            rejectCommand(action, "操作过于频繁，请稍后重试")
+            return
+        }
+        if (!canSendCommand(action)) {
+            rejectCommand(action, "MQTT 未连接、设备离线或命令不受支持")
+            return
+        }
         if (waitingCmdId != null) {
             rejectCommand(action, "上一条命令仍在等待回执")
             return
@@ -247,25 +363,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         lastPreparedCommand = command
         lastCommandLabel = label
-        publishPreparedCommand(label, command)
+        lastCommandParamsSummary = paramsSummary
+        pendingCommandParamsSummary = paramsSummary
+        _retryAvailable.value = false
+        publishPreparedCommand(label, command, paramsSummary)
     }
 
-    private fun publishPreparedCommand(label: String, command: PreparedCommand) {
+    private fun publishPreparedCommand(
+        label: String,
+        command: PreparedCommand,
+        paramsSummary: String?
+    ) {
+        waitingCmdId = command.cmdId
+        waitingCommand = command
+        _commandInFlight.value = true
+        _commandState.value = CommandUiState(
+            cmdId = command.cmdId,
+            cmd = command.cmd,
+            status = CommandStatus.SENDING,
+            message = "$label 发送中",
+            paramsSummary = paramsSummary
+        )
         viewModelScope.launch(Dispatchers.IO) {
             val result = mqtt.publishCmd(command)
             if (result.published && result.cmdId != null) {
-                waitingCmdId = result.cmdId
-                _commandState.postValue(CommandUiState(result.cmdId, command.cmd, CommandStatus.SENDING, "$label 发送中"))
-                commandTimeoutJob?.cancel()
-                commandTimeoutJob = viewModelScope.launch {
-                    delay(5000)
+                viewModelScope.launch {
                     if (waitingCmdId == result.cmdId) {
-                        finishPendingCommand(CommandStatus.TIMEOUT, "$label 回执超时", null)
+                        commandTimeoutJob?.cancel()
+                        commandTimeoutJob = viewModelScope.launch {
+                            delay(5000)
+                            if (waitingCmdId == result.cmdId) {
+                                finishPendingCommand(CommandStatus.TIMEOUT, "$label 回执超时", null)
+                            }
+                        }
                     }
                 }
                 LogUtils.device("已发送操作：$label")
             } else {
-                _commandState.postValue(CommandUiState(command.cmdId, command.cmd, CommandStatus.FAILED, "$label 发送失败"))
+                viewModelScope.launch {
+                    if (waitingCmdId == command.cmdId) {
+                        finishPendingCommand(CommandStatus.FAILED, "$label 发送失败", null)
+                    }
+                }
                 LogUtils.device("命令失败：$label")
             }
         }
@@ -279,11 +418,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         ack ?: return
         val pending = waitingCmdId
         if (pending != null && ack.cmdId == pending) {
+            val pendingCmd = waitingCommand?.cmd
+            if (pendingCmd != null && ack.cmd != pendingCmd) {
+                LogUtils.device(
+                    "忽略命令类型不匹配的回执：cmdId=${ack.cmdId} " +
+                        "expected=$pendingCmd actual=${ack.cmd}"
+                )
+                return
+            }
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
             if (ack.cmd == "manual") {
                 _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
             } else if (ack.cmd == "auto" && status == CommandStatus.SUCCESS) {
                 _remoteModeAccepted.postValue(false)
+            }
+            if (ack.cmd == "start") {
+                val mission = missionState.value
+                val stateAlreadyUpdated = !mission?.missionId.isNullOrBlank() &&
+                    mission?.runState in setOf(
+                        "starting",
+                        "running",
+                        "paused",
+                        "succeeded",
+                        "failed",
+                        "canceled"
+                    )
+                _awaitingStartStatus.postValue(
+                    status == CommandStatus.SUCCESS && !stateAlreadyUpdated
+                )
+            }
+            if (ack.cmd == "clear_estop") {
+                _awaitingClearEstopStatus.postValue(
+                    status == CommandStatus.SUCCESS &&
+                        missionState.value?.safetyState != "normal"
+                )
             }
             finishPendingCommand(status, null, ack.errorCode)
             if (ack.cmd == "manual" && status == CommandStatus.SUCCESS && pendingExitToAuto) {
@@ -298,18 +466,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-        } else {
+        } else if (pending == null) {
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            _commandState.postValue(CommandUiState(ack.cmdId, ack.cmd, status))
+            _commandState.postValue(
+                CommandUiState(
+                    cmdId = ack.cmdId,
+                    cmd = ack.cmd,
+                    status = status,
+                    errorCode = ack.errorCode
+                )
+            )
+        } else {
+            LogUtils.device("忽略非当前命令回执：cmdId=${ack.cmdId}")
         }
     }
 
     private fun finishPendingCommand(status: CommandStatus, message: String?, errorCode: String?) {
         val cmdId = waitingCmdId
-        val cmd = _commandState.value?.cmd
+        val cmd = waitingCommand?.cmd
         waitingCmdId = null
+        waitingCommand = null
+        _commandInFlight.postValue(false)
         commandTimeoutJob?.cancel()
-        _commandState.postValue(CommandUiState(cmdId, cmd, status, message, errorCode))
+        _retryAvailable.postValue(
+            status in setOf(
+                CommandStatus.FAILED,
+                CommandStatus.TIMEOUT,
+                CommandStatus.CONNECTION_LOST
+            )
+        )
+        _commandState.postValue(
+            CommandUiState(
+                cmdId = cmdId,
+                cmd = cmd,
+                status = status,
+                message = message,
+                errorCode = errorCode,
+                paramsSummary = pendingCommandParamsSummary
+            )
+        )
     }
 
     private fun canSendCommand(action: String): Boolean {
@@ -356,22 +551,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         connected: Boolean,
         online: Boolean
     ): ControlAvailability {
-        if (!connected || !online) return ControlAvailability()
-        val mission = missionState.value ?: MissionState()
-        val safety = mission.safetyState
-        val runState = mission.runState
-        val activeMission = !mission.missionId.isNullOrBlank() &&
-            runState in setOf("starting", "running", "paused")
-        val safeForMission = safety == "normal"
-        return ControlAvailability(
-            canStart = safeForMission && !activeMission && mission.operationalMode == "auto",
-            canStop = activeMission,
-            canPause = runState in setOf("starting", "running"),
-            canResume = runState == "paused",
-            canReplan = activeMission && mission.taskKind == "coverage",
-            canEstop = safety !in setOf("estop", "clearing_estop"),
-            canClearEstop = safety == "estop",
-            canRemote = isRemoteAllowed(connected, online)
+        return MissionControlPolicy.compute(
+            connected = connected,
+            online = online,
+            mission = missionState.value ?: MissionState(),
+            manualCommandAccepted = _remoteModeAccepted.value == true,
+            awaitingStartStatus = _awaitingStartStatus.value == true,
+            awaitingClearEstopStatus = _awaitingClearEstopStatus.value == true,
+            commandInFlight = _commandInFlight.value == true,
+            retryAvailable = _retryAvailable.value == true
         )
     }
 
@@ -399,5 +587,8 @@ data class ControlAvailability(
     val canReplan: Boolean = false,
     val canEstop: Boolean = false,
     val canClearEstop: Boolean = false,
-    val canRemote: Boolean = false
+    val canManual: Boolean = false,
+    val canAuto: Boolean = false,
+    val canRemote: Boolean = false,
+    val canRetry: Boolean = false
 )

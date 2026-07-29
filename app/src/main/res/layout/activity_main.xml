@@ -473,6 +473,14 @@
                             android:textSize="13sp" />
 
                         <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnRetryCommand"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="match_parent"
+                            android:layout_height="46dp"
+                            android:layout_marginTop="8dp"
+                            android:text="重试最近失败命令" />
+
+                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnViewLogs"
                             style="?attr/materialButtonOutlinedStyle"
                             android:layout_width="match_parent"
@@ -680,6 +688,38 @@
                             android:textColor="@color/control_title"
                             android:textSize="18sp"
                             android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tvRemoteModeState"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:text="运行模式：-- · 安全状态：--"
+                            android:textColor="@color/control_text_muted" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnEnterManualMode"
+                                android:layout_width="0dp"
+                                android:layout_height="48dp"
+                                android:layout_weight="1"
+                                android:text="进入手动模式" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnReturnAutoMode"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="0dp"
+                                android:layout_height="48dp"
+                                android:layout_marginStart="8dp"
+                                android:layout_weight="1"
+                                android:text="切回自动模式" />
+                        </LinearLayout>
 
                         <com.robot.solar.ui.main.DirectionPadView
                             android:id="@+id/directionPad"

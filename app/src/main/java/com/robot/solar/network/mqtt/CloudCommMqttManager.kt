@@ -86,6 +86,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         override fun onAvailable(network: Network) {
             scope.launch { tryConnectIfNeeded("网络恢复") }
         }
+
+        override fun onLost(network: Network) {
+            _mqttConnected.postValue(false)
+            _deviceOnline.postValue(false)
+            LogUtils.system("网络连接已丢失")
+        }
     }
 
     init {
@@ -435,12 +441,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         return CommandPublishResult(ok, if (ok) command.cmdId else null, command.cmd)
     }
 
-    /** 兼容简单空参数命令的调用入口。 */
-    fun publishCmd(action: String): CommandPublishResult {
-        val command = prepareCommand(action) ?: return CommandPublishResult(false, null, action)
-        return publishCmd(command)
-    }
-
     /** 遥控速度：线速度单位 cm/s，前进为正；角速度单位 rad/s。 */
     fun publishRemote(linearSpeedCms: Double, angularRadps: Double, durationMs: Int = 300): Boolean {
         val deviceId = boundDeviceId ?: return false
@@ -592,6 +592,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         return try {
             val message = MqttMessage(json.toByteArray(Charsets.UTF_8))
             message.qos = qos
+            message.isRetained = false
             mqttClient.publish(topic, message)
             true
         } catch (e: Exception) {

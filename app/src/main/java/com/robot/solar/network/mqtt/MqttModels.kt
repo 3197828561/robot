@@ -161,6 +161,13 @@ data class CoverageCommandParams(
     val globalPlan: Boolean = true
 )
 
+data class CoverageTaskSelection(
+    val useCurrentPose: Boolean,
+    val start: CoverageStart?,
+    val targetBlockIds: List<Long>,
+    val globalPlan: Boolean
+)
+
 data class MissionState(
     val missionId: String? = null,
     val taskKind: String? = null,
@@ -199,7 +206,8 @@ data class CommandUiState(
     val status: CommandStatus,
     val message: String? = null,
     val errorCode: String? = null,
-    val timestampMillis: Long = System.currentTimeMillis()
+    val timestampMillis: Long = System.currentTimeMillis(),
+    val paramsSummary: String? = null
 )
 
 enum class CommandStatus {

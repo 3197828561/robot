@@ -97,12 +97,12 @@ App 会先校验：
 |------|------------------------|--------------------------|
 | 前进 | `+20.0` | `0.0` |
 | 后退 | `-20.0` | `0.0` |
-| 左转 | `0.0` | `-0.5` |
-| 右转 | `0.0` | `+0.5` |
+| 左转 | `0.0` | `+0.5` |
+| 右转 | `0.0` | `-0.5` |
 | 停止 | `0.0` | `0.0` |
 | 急停 | 发布 `cmd = "estop"` | - |
 
-进入遥控页后，App 先发送 `manual`，等待成功 ACK 及
+进入手动遥控前，App 先发送 `manual`，等待成功 ACK 及
 `status.operationalMode=manual` 后才允许发送 `remote`。方向按钮按住前 `500ms`
 不发送；超过后以约 `20Hz`、QoS 0 发送。松开、页面退出、应用进入后台、断连、
 心跳超时或安全状态异常时，App 主动发送零速度并终止周期发送。退出遥控页后发送
@@ -111,6 +111,45 @@ App 会先校验：
 `cmd_ack.ackStatus=success` 只表示命令被任务层受理。`start` 的最终结果由
 `status.missionId/runState` 驱动；`stop/pause/resume/replan` 必须携带最新
 `status.missionId` 作为 `targetMissionId`。
+
+`start` 在发送前由任务配置弹窗收集完整 coverage 参数：
+
+```text
+mapId / mapVersion
+useCurrentPose
+start.blockId / cellRow / cellCol / innerRow / innerCol / heading
+targetBlockIds
+globalPlan
+```
+
+`useCurrentPose=false` 时 `start` 必填；目标区域必须存在、可清洁、大于 0 且不能重复。
+命令发送失败、ACK 失败、ACK 超时或连接中断后，重试复用原 `PreparedCommand`，因此
+`cmdId/timestamp/payload` 均保持不变。
+
+任务状态页展示以下 Robot 字段，安全状态显示优先于任务运行状态：
+
+```text
+missionId taskKind runState operationalMode safetyState phase activeAction
+waypointIndex waypointCount errorCode errorRetryable errorSource errorMessage
+```
+
+### 4.3 发布兼容性
+
+本次升级保持 MQTT topic 和 payload `version="1.0"` 不变，但任务命令 payload、
+ACK 语义、任务状态字段和遥控前置流程不向后兼容。新版 App 必须和支持新版
+`/mission/command` 的 Robot 成对发布，禁止向旧 `/mission/task_cmd` 双写，也禁止
+新版 App 与旧 Robot 混用。
+
+当前 MQTT payload 没有可用于自动识别新旧 Robot 的接口能力字段，因此版本绑定必须
+由发布配置、设备固件白名单或服务端设备能力信息保证。真实发布前需记录：
+
+```text
+App version/versionCode
+Robot image/firmware version
+mission command API capability
+MQTT cmd/cmd_ack/status 抓包
+Robot MQTT/ROS 两侧日志
+```
 
 ## 5. 服务器部署入口
 

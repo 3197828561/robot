@@ -93,11 +93,34 @@ start stop pause resume replan manual auto estop clear_estop
 
 其中：
 
-- `start` 校验 `taskKind=coverage` 和 `coverage` 参数；
+- `start` 校验完整 coverage 参数：
+  - `mapId/mapVersion` 是 uint32 范围整数；
+  - `targetBlockIds` 非空、每项大于 0 且不能重复；
+  - `useCurrentPose=false` 时必须包含完整 `start`；
+  - `start.heading` 必须为 `0..3`；
 - `stop/pause/resume/replan` 校验 `targetMissionId`；
 - `cmd_ack=success` 仅表示命令已受理，最终结果由后续 `status.runState` 表示；
 - `remote` 仅在 `operationalMode=manual` 且 `safetyState=normal` 时处理；
-- `status` 会上报 `missionId/runState/operationalMode/safetyState/phase` 等任务字段。
+- `status` 会上报：
+
+```text
+missionId taskKind runState operationalMode safetyState phase activeAction
+waypointIndex waypointCount errorCode errorRetryable errorSource errorMessage
+```
+
+推荐按以下顺序完成 App 端验收：
+
+```text
+加载地图
+→ 配置并发送 START
+→ 检查 cmd_ack=success 后 UI 显示“已受理/等待状态”
+→ 检查 status.missionId/runState 驱动任务状态
+→ 测试 pause/resume/replan/stop 使用同一最新 missionId
+→ 发送 manual 并等待 status.operationalMode=manual
+→ 按住、松开方向键并检查 remote 周期帧和零速帧
+→ 发送 auto 并等待 operationalMode=auto
+→ 测试 estop/clear_estop 及 safetyState 状态回流
+```
 
 传入地图 URL 时，还会发布 `map` 通知：
 

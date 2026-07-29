@@ -13,10 +13,13 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 import com.robot.solar.databinding.ActivityMainBinding
+import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.map.MapPosition
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
+import com.robot.solar.network.mqtt.CoverageStart
+import com.robot.solar.network.mqtt.CoverageTaskSelection
 import com.robot.solar.network.mqtt.MapLoadStatus
 import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.PoseMessage
@@ -26,6 +29,8 @@ import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.log.LogActivity
 import com.robot.solar.viewmodel.ControlAvailability
 import com.robot.solar.viewmodel.MainViewModel
+import com.robot.solar.viewmodel.MissionStatusDisplay
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -76,7 +81,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         binding.directionPad.cancelInput()
-        viewModel.stopRemote(sendZero = true)
+        viewModel.ordinaryRemoteStop()
         super.onPause()
     }
 
@@ -107,11 +112,14 @@ class MainActivity : AppCompatActivity() {
             bindStatus(viewModel.status.value)
         }
         viewModel.status.observe(this) { bindStatus(it) }
+        viewModel.missionState.observe(this) { bindStatus(viewModel.status.value) }
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
         viewModel.mapState.observe(this) { bindMap(it) }
         viewModel.pose.observe(this) { bindPose(it) }
         viewModel.commandState.observe(this) { bindCommandState(it) }
         viewModel.controlsEnabled.observe(this) { bindAvailability(it) }
+        viewModel.awaitingStartStatus.observe(this) { bindStatus(viewModel.status.value) }
+        viewModel.awaitingClearEstopStatus.observe(this) { bindStatus(viewModel.status.value) }
     }
 
     private fun applySystemBarInsets() {
@@ -133,7 +141,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindControls() {
-        binding.btnStart.setOnClickListener { viewModel.startCoverage() }
+        binding.btnStart.setOnClickListener { showCoverageTaskDialog() }
         binding.btnStopRun.setOnClickListener { viewModel.sendMissionCommand("停止任务", "stop") }
         binding.btnPause.setOnClickListener { viewModel.sendMissionCommand("暂停任务", "pause") }
         binding.btnResume.setOnClickListener { viewModel.sendMissionCommand("恢复任务", "resume") }
@@ -149,6 +157,9 @@ class MainActivity : AppCompatActivity() {
             binding.directionPad.cancelInput()
             viewModel.ordinaryRemoteStop()
         }
+        binding.btnEnterManualMode.setOnClickListener { viewModel.enterRemoteMode() }
+        binding.btnReturnAutoMode.setOnClickListener { viewModel.exitRemoteMode() }
+        binding.btnRetryCommand.setOnClickListener { viewModel.retryLastCommand() }
         binding.btnReloadMap.setOnClickListener { viewModel.retryMapDownload() }
         binding.btnCenterRobot.setOnClickListener {
             if (!binding.mapPreviewView.centerRobot()) {
@@ -191,6 +202,101 @@ class MainActivity : AppCompatActivity() {
         binding.navStatus.setOnClickListener { showPage(Page.STATUS) }
     }
 
+    private fun showCoverageTaskDialog() {
+        val map = currentMapState.pvMap
+        if (map == null) {
+            Toast.makeText(this, "请先加载有效地图", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dialogBinding = DialogCoverageTaskBinding.inflate(layoutInflater)
+        dialogBinding.tvCoverageMap.text = "地图：${map.mapId}  版本：${map.version}"
+        dialogBinding.etTargetBlockIds.setText(
+            map.blocks
+                .filter { it.cleanable && it.blockId > 0 }
+                .joinToString(",") { it.blockId.toString() }
+        )
+        currentPose?.let { pose ->
+            dialogBinding.etStartBlockId.setText(pose.blockId?.toString().orEmpty())
+            dialogBinding.etStartCellRow.setText(pose.cellRow?.toString().orEmpty())
+            dialogBinding.etStartCellCol.setText(pose.cellCol?.toString().orEmpty())
+            dialogBinding.etStartInnerRow.setText(pose.innerRow?.toString().orEmpty())
+            dialogBinding.etStartInnerCol.setText(pose.innerCol?.toString().orEmpty())
+            dialogBinding.etStartHeading.setText(pose.headingCode?.toString().orEmpty())
+        }
+        fun updateStartFields() {
+            dialogBinding.groupCoverageStart.visibility =
+                if (dialogBinding.cbUseCurrentPose.isChecked) View.GONE else View.VISIBLE
+        }
+        dialogBinding.cbUseCurrentPose.setOnCheckedChangeListener { _, _ -> updateStartFields() }
+        updateStartFields()
+
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setTitle("配置覆盖任务")
+            .setView(dialogBinding.root)
+            .setNegativeButton("取消", null)
+            .setPositiveButton("发送 START", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                val rawTargets = dialogBinding.etTargetBlockIds.text?.toString().orEmpty().trim()
+                val targets = runCatching {
+                    rawTargets
+                        .split(Regex("[,，\\s]+"))
+                        .filter(String::isNotBlank)
+                        .map(String::toLong)
+                }.getOrElse {
+                    Toast.makeText(this, "目标 blockId 格式错误", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (targets.isEmpty()) {
+                    Toast.makeText(this, "至少填写一个目标 blockId", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                val useCurrentPose = dialogBinding.cbUseCurrentPose.isChecked
+                val start = if (useCurrentPose) {
+                    null
+                } else {
+                    val blockId = dialogBinding.etStartBlockId.text?.toString()?.toLongOrNull()
+                    val cellRow = dialogBinding.etStartCellRow.text?.toString()?.toIntOrNull()
+                    val cellCol = dialogBinding.etStartCellCol.text?.toString()?.toIntOrNull()
+                    val innerRow = dialogBinding.etStartInnerRow.text?.toString()?.toIntOrNull()
+                    val innerCol = dialogBinding.etStartInnerCol.text?.toString()?.toIntOrNull()
+                    val heading = dialogBinding.etStartHeading.text?.toString()?.toIntOrNull()
+                    if (
+                        blockId == null ||
+                        cellRow == null ||
+                        cellCol == null ||
+                        innerRow == null ||
+                        innerCol == null ||
+                        heading == null
+                    ) {
+                        Toast.makeText(this, "请完整填写起点的六个字段", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    CoverageStart(
+                        blockId = blockId,
+                        cellRow = cellRow,
+                        cellCol = cellCol,
+                        innerRow = innerRow,
+                        innerCol = innerCol,
+                        heading = heading
+                    )
+                }
+                viewModel.startCoverage(
+                    CoverageTaskSelection(
+                        useCurrentPose = useCurrentPose,
+                        start = start,
+                        targetBlockIds = targets,
+                        globalPlan = dialogBinding.cbGlobalPlan.isChecked
+                    )
+                )
+                dialog.dismiss()
+            }
+        }
+        dialog.show()
+    }
+
     private fun bindStatus(status: StatusMessage?) {
         val details = if (status == null) {
             listOf(
@@ -206,13 +312,23 @@ class MainActivity : AppCompatActivity() {
                 "运动状态：--",
                 "任务编号：${viewModel.missionState.value?.missionId ?: "--"}",
                 "任务类型：${viewModel.missionState.value?.taskKind ?: "--"}",
-                "任务状态：${missionStatusText(
+                "任务状态：${MissionStatusDisplay.text(
                     viewModel.missionState.value?.runState,
-                    viewModel.missionState.value?.safetyState
+                    viewModel.missionState.value?.safetyState,
+                    viewModel.awaitingStartStatus.value == true,
+                    viewModel.awaitingClearEstopStatus.value == true
                 )}",
+                "runState：${viewModel.missionState.value?.runState ?: "--"}",
                 "运行模式：${viewModel.missionState.value?.operationalMode ?: "--"}",
                 "安全状态：${viewModel.missionState.value?.safetyState ?: "--"}",
                 "任务阶段：${viewModel.missionState.value?.phase ?: "--"}",
+                "当前动作：${viewModel.missionState.value?.activeAction ?: "--"}",
+                "航点索引：${viewModel.missionState.value?.waypointIndex ?: "--"}",
+                "航点总数：${viewModel.missionState.value?.waypointCount ?: "--"}",
+                "错误码：${viewModel.missionState.value?.errorCode ?: "--"}",
+                "错误可重试：${viewModel.missionState.value?.errorRetryable ?: "--"}",
+                "错误来源：${viewModel.missionState.value?.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
+                "错误信息：${viewModel.missionState.value?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
                 "地图编号：${currentMapState.map?.mapId ?: "--"}",
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
@@ -234,12 +350,23 @@ class MainActivity : AppCompatActivity() {
                 "运动状态：${ProtocolDisplayText.movementStatus(this, status.movementStatus)}",
                 "任务编号：${status.missionId ?: "--"}",
                 "任务类型：${status.taskKind ?: "--"}",
-                "任务状态：${missionStatusText(status.runState, status.safetyState)}",
+                "任务状态：${MissionStatusDisplay.text(
+                    status.runState,
+                    status.safetyState,
+                    viewModel.awaitingStartStatus.value == true,
+                    viewModel.awaitingClearEstopStatus.value == true
+                )}",
+                "runState：${status.runState ?: "--"}",
                 "运行模式：${status.operationalMode ?: "--"}",
                 "安全状态：${status.safetyState ?: "--"}",
                 "任务阶段：${status.phase ?: "--"}",
-                "任务进度：${status.waypointIndex?.let { index -> "${index}/${status.waypointCount ?: "--"}" } ?: "--"}",
-                "任务错误：${status.errorMessage?.takeIf { it.isNotBlank() } ?: status.missionErrorCode ?: "--"}",
+                "当前动作：${status.activeAction?.takeIf { it.isNotBlank() } ?: "--"}",
+                "航点索引：${status.waypointIndex ?: "--"}",
+                "航点总数：${status.waypointCount ?: "--"}",
+                "错误码：${status.missionErrorCode ?: "--"}",
+                "错误可重试：${status.errorRetryable ?: "--"}",
+                "错误来源：${status.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
+                "错误信息：${status.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
                 "地图编号：${currentMapState.map?.mapId ?: "--"}",
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
@@ -250,6 +377,10 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvStatusDetails.text = details
         binding.tvRemoteStatus.text = details
+        val mission = viewModel.missionState.value
+        binding.tvRemoteModeState.text =
+            "运行模式：${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
+                "安全状态：${status?.safetyState ?: mission?.safetyState ?: "--"}"
         bindHomeStatusCard(status)
     }
 
@@ -356,7 +487,7 @@ class MainActivity : AppCompatActivity() {
             key = key,
             time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(state.timestampMillis)),
             command = state.cmd ?: commandName,
-            params = "--",
+            params = state.paramsSummary ?: "--",
             status = statusText,
             description = commandDescription(state.cmd, state.status)
         )
@@ -415,6 +546,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnEmergency.isEnabled = availability.canEstop
         binding.btnRemoteEmergency.isEnabled = availability.canEstop
         binding.btnClearEstop.isEnabled = availability.canClearEstop
+        binding.btnEnterManualMode.isEnabled = availability.canManual
+        binding.btnReturnAutoMode.isEnabled = availability.canAuto
+        binding.btnRetryCommand.isEnabled = availability.canRetry
         binding.directionPad.controlsEnabled = availability.canRemote
         binding.btnRemoteStop.isEnabled = availability.canRemote
         binding.tvRemoteHint.text = if (availability.canRemote) {
@@ -449,26 +583,6 @@ class MainActivity : AppCompatActivity() {
             viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许手动控制"
             viewModel.missionState.value?.operationalMode != "manual" -> "正在等待机器人切换到手动模式"
             else -> "当前条件不满足"
-        }
-    }
-
-    private fun missionStatusText(runState: String?, safetyState: String?): String {
-        return when (safetyState) {
-            "estop" -> "急停"
-            "clearing_estop" -> "解除急停中"
-            "low_battery" -> "低电量"
-            "fault" -> "故障"
-            else -> when (runState) {
-                "idle" -> "空闲"
-                "starting" -> "启动中"
-                "running" -> "运行中"
-                "paused" -> "已暂停"
-                "succeeded" -> "已完成"
-                "failed" -> "失败"
-                "canceled" -> "已取消"
-                null -> "--"
-                else -> "未知"
-            }
         }
     }
 

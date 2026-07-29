@@ -216,10 +216,56 @@ function Apply-Cmd {
             if (!$Params -or [string]$Params.taskKind -ne "coverage" -or !$Params.coverage) {
                 return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
             }
+            $coverage = $Params.coverage
+            $coverageFields = @($coverage.PSObject.Properties.Name)
+            if (
+                "mapId" -notin $coverageFields -or
+                "mapVersion" -notin $coverageFields -or
+                "useCurrentPose" -notin $coverageFields -or
+                "targetBlockIds" -notin $coverageFields -or
+                "globalPlan" -notin $coverageFields
+            ) {
+                return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+            }
+            $mapId = [long]$coverage.mapId
+            $mapVersion = [long]$coverage.mapVersion
+            if ($mapId -lt 0 -or $mapId -gt 4294967295 -or $mapVersion -lt 0 -or $mapVersion -gt 4294967295) {
+                return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+            }
+            $targetIds = @($coverage.targetBlockIds)
+            if ($targetIds.Count -eq 0) {
+                return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+            }
+            $seenTargets = @{}
+            foreach ($target in $targetIds) {
+                $targetId = [long]$target
+                if ($targetId -le 0 -or $seenTargets.ContainsKey($targetId)) {
+                    return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+                }
+                $seenTargets[$targetId] = $true
+            }
+            if (![bool]$coverage.useCurrentPose) {
+                if (!$coverage.start) {
+                    return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+                }
+                $startFields = @($coverage.start.PSObject.Properties.Name)
+                foreach ($required in @("blockId", "cellRow", "cellCol", "innerRow", "innerCol", "heading")) {
+                    if ($required -notin $startFields) {
+                        return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+                    }
+                }
+                $heading = [int]$coverage.start.heading
+                if ($heading -lt 0 -or $heading -gt 3) {
+                    return @{ Success = $false; ErrorCode = "MISSION_INVALID_REQUEST" }
+                }
+            }
             $script:MissionId = "mission-$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
             $script:TaskKind = "coverage"
             $script:RunState = "running"
             $script:MissionPhase = "executing"
+            $script:ActiveAction = "cross_panel"
+            $script:WaypointIndex = 0
+            $script:WaypointCount = $targetIds.Count
             $script:OperationalMode = "auto"
             $script:SafetyState = "normal"
             $script:WorkStatus = "running"
@@ -234,6 +280,7 @@ function Apply-Cmd {
         "stop" {
             $script:RunState = "canceled"
             $script:MissionPhase = "none"
+            $script:ActiveAction = ""
             $script:WorkStatus = "stopped"
             $script:MovementStatus = "stopped"
             $script:DeviceStatus = "normal"
@@ -246,6 +293,7 @@ function Apply-Cmd {
                 return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
             }
             $script:RunState = "paused"
+            $script:ActiveAction = ""
             $script:MovementStatus = "stopped"
             $script:LinearSpeed = 0
             $script:AngularSpeed = 0
@@ -256,6 +304,7 @@ function Apply-Cmd {
             }
             $script:RunState = "running"
             $script:MissionPhase = "executing"
+            $script:ActiveAction = "cross_panel"
             $script:MovementStatus = "moving"
             $script:LinearSpeed = 12
         }
@@ -264,6 +313,7 @@ function Apply-Cmd {
                 return @{ Success = $false; ErrorCode = "MISSION_ILLEGAL_STATE" }
             }
             $script:MissionPhase = "planning"
+            $script:ActiveAction = ""
         }
         "manual" {
             if ($script:SafetyState -ne "normal") {
@@ -273,6 +323,7 @@ function Apply-Cmd {
                 $script:RunState = "canceled"
                 $script:MissionPhase = "none"
             }
+            $script:ActiveAction = "remote"
             $script:OperationalMode = "manual"
             $script:ControlMode = "manual"
             $script:WorkStatus = "stopped"
@@ -283,12 +334,14 @@ function Apply-Cmd {
         "auto" {
             $script:OperationalMode = "auto"
             $script:ControlMode = "auto"
+            $script:ActiveAction = ""
             $script:MovementStatus = "stopped"
             $script:LinearSpeed = 0
             $script:AngularSpeed = 0
         }
         "estop" {
             $script:SafetyState = "estop"
+            $script:ActiveAction = ""
             $script:WorkStatus = "estopped"
             $script:MovementStatus = "stopped"
             $script:DeviceStatus = "normal"
