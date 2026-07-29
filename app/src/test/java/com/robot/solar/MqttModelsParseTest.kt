@@ -38,7 +38,12 @@ class MqttModelsParseTest {
         val status = gson.fromJson(json, StatusMessage::class.java)
 
         assertEquals("stopped", status.workStatus)
+        assertEquals("manual", status.controlMode)
         assertEquals(82.0, status.batteryPercent!!, 0.01)
+        assertEquals(0.0, status.linearSpeedCms!!, 0.01)
+        assertEquals(0.0, status.angularSpeedRadps!!, 0.01)
+        assertEquals("normal", status.deviceStatus)
+        assertEquals("stopped", status.movementStatus)
         assertEquals(42.0, status.temperatureC!!, 0.01)
         assertEquals(156, status.cleanedRows)
     }
@@ -101,6 +106,7 @@ class MqttModelsParseTest {
         )
 
         assertEquals("mission-42", status.missionId)
+        assertEquals("coverage", status.taskKind)
         assertEquals("running", status.runState)
         assertEquals("auto", status.operationalMode)
         assertEquals("normal", status.safetyState)

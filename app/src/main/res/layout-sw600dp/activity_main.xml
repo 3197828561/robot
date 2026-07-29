@@ -430,52 +430,18 @@
                                 android:textSize="13sp" />
                         </LinearLayout>
 
-                        <TextView
+                        <HorizontalScrollView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:background="@color/control_page_bg"
-                            android:padding="8dp"
-                            android:text="时间                         命令                         参数                         状态                         说明"
-                            android:textColor="@color/control_text_muted"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
+                            android:fillViewport="true"
+                            android:scrollbars="none">
 
-                    <TextView
-                        android:id="@+id/tvCommandRow1"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow2"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow3"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow4"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
+                            <com.robot.solar.ui.main.CommandHistoryTableView
+                                android:id="@+id/commandHistoryTable"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content" />
+                        </HorizontalScrollView>
 
                     <TextView
                         android:id="@+id/tvCommandState"
@@ -731,8 +697,8 @@
 
                     <com.robot.solar.ui.main.DirectionPadView
                         android:id="@+id/directionPad"
-                        android:layout_width="240dp"
-                        android:layout_height="240dp"
+                        android:layout_width="288dp"
+                        android:layout_height="288dp"
                         android:layout_marginTop="6dp" />
 
                     <TextView
@@ -789,13 +755,11 @@
                     <com.robot.solar.ui.main.ManualSpeedControlView
                         android:id="@+id/manualSpeedControl"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp" />
-
-                    <Space
-                        android:layout_width="match_parent"
                         android:layout_height="0dp"
-                        android:layout_weight="1" />
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRemoteStop"

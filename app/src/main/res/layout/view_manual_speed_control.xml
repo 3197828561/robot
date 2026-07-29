@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/control_legend_bg"
+    android:background="@drawable/bg_speed_panel"
     android:orientation="vertical"
     android:padding="12dp">
 
@@ -117,7 +117,8 @@
             android:value="30"
             android:valueFrom="0"
             android:valueTo="50"
-            app:labelBehavior="gone" />
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnLinearPlus"
@@ -178,7 +179,8 @@
             android:value="0.3"
             android:valueFrom="0"
             android:valueTo="0.5"
-            app:labelBehavior="gone" />
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAngularPlus"

@@ -2,10 +2,11 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:background="@color/control_legend_bg"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_speed_panel"
+    android:gravity="center_vertical"
     android:orientation="vertical"
-    android:padding="10dp">
+    android:padding="16dp">
 
     <TextView
         android:layout_width="match_parent"
@@ -27,7 +28,7 @@
             android:id="@+id/btnSpeedSlow"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:ellipsize="none"
             android:insetTop="0dp"
@@ -39,13 +40,13 @@
             android:singleLine="true"
             android:text="慢速 10/.1"
             android:textAllCaps="false"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSpeedStandard"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:ellipsize="none"
             android:insetTop="0dp"
@@ -57,13 +58,13 @@
             android:singleLine="true"
             android:text="标准 30/.3"
             android:textAllCaps="false"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnSpeedHigh"
             style="?attr/materialButtonOutlinedStyle"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="48dp"
             android:layout_weight="1"
             android:ellipsize="none"
             android:insetTop="0dp"
@@ -75,7 +76,7 @@
             android:singleLine="true"
             android:text="高速 50/.5"
             android:textAllCaps="false"
-            android:textSize="10sp" />
+            android:textSize="11sp" />
     </com.google.android.material.button.MaterialButtonToggleGroup>
 
     <TextView
@@ -103,7 +104,8 @@
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="−"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            app:cornerRadius="19dp" />
 
         <com.google.android.material.slider.Slider
             android:id="@+id/sliderLinearSpeed"
@@ -115,7 +117,8 @@
             android:value="30"
             android:valueFrom="0"
             android:valueTo="50"
-            app:labelBehavior="gone" />
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnLinearPlus"
@@ -127,12 +130,15 @@
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="+"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            app:cornerRadius="19dp" />
 
         <TextView
             android:id="@+id/tvLinearSpeedValue"
             android:layout_width="52dp"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_speed_value"
             android:gravity="center"
             android:text="30&#10;cm/s"
             android:textColor="@color/control_title"
@@ -165,7 +171,8 @@
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="−"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            app:cornerRadius="19dp" />
 
         <com.google.android.material.slider.Slider
             android:id="@+id/sliderAngularSpeed"
@@ -177,7 +184,8 @@
             android:value="0.3"
             android:valueFrom="0"
             android:valueTo="0.5"
-            app:labelBehavior="gone" />
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnAngularPlus"
@@ -189,12 +197,15 @@
             android:minWidth="0dp"
             android:padding="0dp"
             android:text="+"
-            android:textSize="18sp" />
+            android:textSize="18sp"
+            app:cornerRadius="19dp" />
 
         <TextView
             android:id="@+id/tvAngularSpeedValue"
             android:layout_width="52dp"
-            android:layout_height="wrap_content"
+            android:layout_height="44dp"
+            android:layout_marginStart="4dp"
+            android:background="@drawable/bg_speed_value"
             android:gravity="center"
             android:text="0.3&#10;rad/s"
             android:textColor="@color/control_title"

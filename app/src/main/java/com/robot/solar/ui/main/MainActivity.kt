@@ -309,87 +309,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindStatus(status: StatusMessage?) {
-        val details = if (status == null) {
-            listOf(
-                "设备名称：${viewModel.deviceDisplayName ?: "--"}",
-                "设备编号：${viewModel.deviceId ?: "--"}",
-                "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}",
-                "APP版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                "任务接口能力：${BuildConfig.MISSION_COMMAND_API_CAPABILITY}",
-                "工作状态：--",
-                "控制模式：--",
-                "电量：--",
-                "线速度：--",
-                "角速度：--",
-                "设备状态：--",
-                "运动状态：--",
-                "任务编号：${viewModel.missionState.value?.missionId ?: "--"}",
-                "任务类型：${viewModel.missionState.value?.taskKind ?: "--"}",
-                "任务状态：${MissionStatusDisplay.text(
-                    viewModel.missionState.value?.runState,
-                    viewModel.missionState.value?.safetyState,
-                    viewModel.awaitingStartStatus.value == true,
-                    viewModel.awaitingClearEstopStatus.value == true
-                )}",
-                "runState：${viewModel.missionState.value?.runState ?: "--"}",
-                "运行模式：${viewModel.missionState.value?.operationalMode ?: "--"}",
-                "安全状态：${viewModel.missionState.value?.safetyState ?: "--"}",
-                "任务阶段：${viewModel.missionState.value?.phase ?: "--"}",
-                "当前动作：${viewModel.missionState.value?.activeAction ?: "--"}",
-                "航点索引：${viewModel.missionState.value?.waypointIndex ?: "--"}",
-                "航点总数：${viewModel.missionState.value?.waypointCount ?: "--"}",
-                "错误码：${viewModel.missionState.value?.errorCode ?: "--"}",
-                "错误可重试：${viewModel.missionState.value?.errorRetryable ?: "--"}",
-                "错误来源：${viewModel.missionState.value?.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
-                "错误信息：${viewModel.missionState.value?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
-                "地图编号：${currentMapState.map?.mapId ?: "--"}",
-                "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
-                "当前区域：${currentPose?.blockId ?: "--"}",
-                "当前单元：${currentPose?.cellId ?: "--"}",
-                "机器人朝向：${ProtocolDisplayText.mapHeading(currentPose?.headingCode, currentPose?.heading)}",
-                "最后在线时间：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
-            ).joinToString("\n")
-        } else {
-            listOf(
-                "设备名称：${viewModel.deviceDisplayName ?: "--"}",
-                "设备编号：${viewModel.deviceId ?: "--"}",
-                "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}",
-                "APP版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
-                "任务接口能力：${BuildConfig.MISSION_COMMAND_API_CAPABILITY}",
-                "工作状态：${ProtocolDisplayText.workStatus(this, status.workStatus)}",
-                "控制模式：${ProtocolDisplayText.controlMode(this, status.controlMode)}",
-                "电量：${status.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}",
-                "线速度：${status.linearSpeedCms?.let { String.format(Locale.getDefault(), "%.1f cm/s", it) } ?: "--"}",
-                "角速度：${status.angularSpeedRadps?.let { String.format(Locale.getDefault(), "%.2f rad/s", it) } ?: "--"}",
-                "设备状态：${ProtocolDisplayText.deviceStatus(this, status.deviceStatus)}",
-                "运动状态：${ProtocolDisplayText.movementStatus(this, status.movementStatus)}",
-                "任务编号：${status.missionId ?: "--"}",
-                "任务类型：${status.taskKind ?: "--"}",
-                "任务状态：${MissionStatusDisplay.text(
-                    status.runState,
-                    status.safetyState,
-                    viewModel.awaitingStartStatus.value == true,
-                    viewModel.awaitingClearEstopStatus.value == true
-                )}",
-                "runState：${status.runState ?: "--"}",
-                "运行模式：${status.operationalMode ?: "--"}",
-                "安全状态：${status.safetyState ?: "--"}",
-                "任务阶段：${status.phase ?: "--"}",
-                "当前动作：${status.activeAction?.takeIf { it.isNotBlank() } ?: "--"}",
-                "航点索引：${status.waypointIndex ?: "--"}",
-                "航点总数：${status.waypointCount ?: "--"}",
-                "错误码：${status.missionErrorCode ?: "--"}",
-                "错误可重试：${status.errorRetryable ?: "--"}",
-                "错误来源：${status.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
-                "错误信息：${status.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
-                "地图编号：${currentMapState.map?.mapId ?: "--"}",
-                "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
-                "当前区域：${currentPose?.blockId ?: "--"}",
-                "当前单元：${currentPose?.cellId ?: "--"}",
-                "机器人朝向：${ProtocolDisplayText.mapHeading(currentPose?.headingCode, currentPose?.heading)}",
-                "最后在线时间：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
-            ).joinToString("\n")
-        }
+        val details = buildStatusDetails(status)
         val mission = viewModel.missionState.value
         val speed = viewModel.manualSpeedSettings.value ?: ManualSpeedSettings()
         val remoteDetails = listOf(
@@ -411,6 +331,85 @@ class MainActivity : AppCompatActivity() {
                 "安全状态：${status?.safetyState ?: mission?.safetyState ?: "--"}"
         bindHomeStatusCard(status)
     }
+
+    /**
+     * 状态详情只展示真实数据源：
+     * - 设备基础信息来自设备列表 HTTP API；
+     * - 机器人、任务字段来自 MQTT status；
+     * - 地图与定位来自 MQTT map/pose（地图允许使用同一消息落盘的缓存）；
+     * - APP 信息来自 BuildConfig，心跳时间为 APP 实际接收时间。
+     */
+    private fun buildStatusDetails(status: StatusMessage?): String = listOf(
+        "【设备列表 API】",
+        "设备名称 display_name：${viewModel.deviceDisplayName ?: "--"}",
+        "设备编号 device_id：${viewModel.deviceId ?: "--"}",
+        "设备类型 product_type：${viewModel.productType?.let {
+            ProtocolDisplayText.productType(this, it)
+        } ?: "--"}",
+        "",
+        "【APP 本地构建配置】",
+        "APP版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+        "任务接口能力：${BuildConfig.MISSION_COMMAND_API_CAPABILITY}",
+        "",
+        "【MQTT status】",
+        "状态消息时间 timestamp：${status?.timestamp ?: "--"}",
+        "工作状态 workStatus：${status?.let {
+            ProtocolDisplayText.workStatus(this, it.workStatus)
+        } ?: "--"}",
+        "控制模式 controlMode：${status?.let {
+            ProtocolDisplayText.controlMode(this, it.controlMode)
+        } ?: "--"}",
+        "电量 batteryPercent：${status?.batteryPercent?.let {
+            "${it.toInt().coerceIn(0, 100)}%"
+        } ?: "--"}",
+        "线速度 linearSpeedCms：${status?.linearSpeedCms?.let {
+            String.format(Locale.getDefault(), "%.1f cm/s", it)
+        } ?: "--"}",
+        "角速度 angularSpeedRadps：${status?.angularSpeedRadps?.let {
+            String.format(Locale.getDefault(), "%.2f rad/s", it)
+        } ?: "--"}",
+        "设备状态 deviceStatus：${status?.let {
+            ProtocolDisplayText.deviceStatus(this, it.deviceStatus)
+        } ?: "--"}",
+        "运动状态 movementStatus：${status?.let {
+            ProtocolDisplayText.movementStatus(this, it.movementStatus)
+        } ?: "--"}",
+        "任务编号 missionId：${status?.missionId ?: "--"}",
+        "任务类型 taskKind：${status?.taskKind ?: "--"}",
+        "任务状态（由 runState/safetyState 映射）：${status?.let {
+            MissionStatusDisplay.text(
+                it.runState,
+                it.safetyState,
+                viewModel.awaitingStartStatus.value == true,
+                viewModel.awaitingClearEstopStatus.value == true
+            )
+        } ?: "--"}",
+        "runState：${status?.runState ?: "--"}",
+        "运行模式 operationalMode：${status?.operationalMode ?: "--"}",
+        "安全状态 safetyState：${status?.safetyState ?: "--"}",
+        "任务阶段 phase：${status?.phase ?: "--"}",
+        "当前动作 activeAction：${status?.activeAction?.takeIf { it.isNotBlank() } ?: "--"}",
+        "航点索引 waypointIndex：${status?.waypointIndex ?: "--"}",
+        "航点总数 waypointCount：${status?.waypointCount ?: "--"}",
+        "错误码 errorCode：${status?.missionErrorCode ?: "--"}",
+        "错误可重试 errorRetryable：${status?.errorRetryable ?: "--"}",
+        "错误来源 errorSource：${status?.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
+        "错误信息 errorMessage：${status?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
+        "",
+        "【MQTT map（允许本地缓存）/ pose】",
+        "地图编号 mapId：${currentMapState.map?.mapId ?: "--"}",
+        "地图版本 mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+        "当前区域 blockId：${currentPose?.blockId ?: "--"}",
+        "当前单元 cellId：${currentPose?.cellId ?: "--"}",
+        "机器人朝向 heading：${
+            currentPose?.let {
+                ProtocolDisplayText.mapHeading(it.headingCode, it.heading)
+            } ?: "--"
+        }",
+        "",
+        "【MQTT heartbeat】",
+        "APP最近收到心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
+    ).joinToString("\n")
 
     private fun bindMap(mapState: MapUiState) {
         currentMapState = mapState
@@ -506,21 +505,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindCommandRows(items: List<StructuredLogEntity>) {
-        val placeholders = listOf(
-            com.robot.solar.R.id.tvCommandRow1,
-            com.robot.solar.R.id.tvCommandRow2,
-            com.robot.solar.R.id.tvCommandRow3,
-            com.robot.solar.R.id.tvCommandRow4
-        )
-        placeholders.forEachIndexed { index, id ->
-            findViewById<TextView?>(id)?.text = items.getOrNull(index)?.let {
+        binding.commandHistoryTable.submitRows(
+            items.take(4).map {
                 val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(it.timestampMillis))
                 val params = runCatching {
                     JSONObject(it.detailJson.orEmpty()).optString("params").ifBlank { "--" }
                 }.getOrDefault("--")
-                "$time    ${it.action ?: "--"}    $params    ${it.result ?: "--"}    ${it.summary}"
-            } ?: "--    --    --    --    --"
-        }
+                CommandHistoryDisplayRow(
+                    time = time,
+                    command = ProtocolDisplayText.commandName(this, it.action),
+                    params = params,
+                    status = commandResultText(it.result),
+                    description = it.summary
+                )
+            }
+        )
+    }
+
+    private fun commandResultText(result: String?): String = when (result) {
+        "idle" -> "待处理"
+        "sending" -> "发送中"
+        "success" -> "成功"
+        "failed" -> "失败"
+        "timeout" -> "超时"
+        "connection_lost" -> "连接中断"
+        "rejected" -> "已拒绝"
+        null, "" -> "--"
+        else -> result
     }
 
     private fun bindAvailability(availability: ControlAvailability) {
