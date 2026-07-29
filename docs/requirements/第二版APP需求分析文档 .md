@@ -1,6 +1,6 @@
 # 解读文档：
 
-------
+---
 
 # 一、APP端UI示例
 
@@ -20,11 +20,12 @@ MQTT Topic 统一采用：
 device/{productType}/{deviceId}/{topicType}
 ```
 
-| 字段          | 说明                                                         | 开发阶段取值                                                 |
-| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| `productType` | 设备类型（三类：`crawler`、`hanging`、`installer`，APP 分别展示为“履带式机器人”“挂轨式机器人”“安装机器人”）。 | `crawler`                                                    |
-| `deviceId`    | 设备唯一编号，格式为 `{productType}_{8位数字}`               | `crawler_00000001`                                           |
-| `topicType`   | 接口类型                                                     | `cmd`、`remote`、`heartbeat`、`status`、`cmd_ack`、`map`、`pose` |
+
+| 字段          | 说明                                                                                                                | 开发阶段取值                                                     |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `productType` | 设备类型（三类：`crawler`、`hanging`、`installer`，APP 分别展示为“履带式机器人”“挂轨式机器人”“安装机器人”）。 | `crawler`                                                        |
+| `deviceId`    | 设备唯一编号，格式为`{productType}_{8位数字}`                                                                       | `crawler_00000001`                                               |
+| `topicType`   | 接口类型                                                                                                            | `cmd`、`remote`、`heartbeat`、`status`、`cmd_ack`、`map`、`pose` |
 
 示例：
 
@@ -32,7 +33,7 @@ device/{productType}/{deviceId}/{topicType}
 device/crawler/crawler_00000001/cmd
 ```
 
-所有 Payload 使用 JSON 格式，字段采用 `camelCase`小驼峰风格命名。  
+所有 Payload 使用 JSON 格式，字段采用 `camelCase`小驼峰风格命名。
 `timestamp` 使用 RFC3339 毫秒级 UTC 时间：
 
 ```json
@@ -58,10 +59,11 @@ Robot MQTT Username: robot_device_001
 Robot MQTT Password: 此为公开文档暂不提供密码
 ```
 
+
 | 参数                | 说明                              |
 | ------------------- | --------------------------------- |
 | MQTT Broker         | MQTT 服务器地址                   |
-| MQTT Port           | 第一版使用 `1883` 非 TLS 端口     |
+| MQTT Port           | 第一版使用`1883` 非 TLS 端口      |
 | MQTT Version        | APP 与 Robot 统一使用 MQTT 3.1.1  |
 | Username / Password | MQTT 登录认证信息，由系统配置提供 |
 
@@ -75,6 +77,7 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                 |
 | ------------ | ------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/cmd` |
@@ -82,15 +85,17 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
 
 #### 2.字段、含义、取值
 
+
 | 字段          | 类型   | 必填 | 含义         | 开发阶段取值                            |
 | ------------- | ------ | ---: | ------------ | --------------------------------------- |
-| `version`     | string |   是 | 接口版本     | 固定 `"1.0"`                            |
+| `version`     | string |   是 | 接口版本     | 固定`"1.0"`                             |
 | `cmdId`       | string |   是 | 命令唯一 ID  | `cmd_{timestamp}`                       |
 | `deviceId`    | string |   是 | 目标设备 ID  | `crawler_00000001`                      |
 | `productType` | string |   是 | 设备类型     | `crawler`                               |
 | `timestamp`   | string |   是 | 消息生成时间 | RFC3339 毫秒级 UTC 时间                 |
 | `cmd`         | string |   是 | 控制命令     | `start`、`stop`、`estop`、`clear_estop` |
 | `params`      | object |   是 | 命令参数     | 预留命令参数对象，第一版为空            |
+
 
 | `cmd`         | 含义                     |
 | ------------- | ------------------------ |
@@ -121,6 +126,7 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                    |
 | ------------ | ---------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/remote` |
@@ -128,35 +134,37 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
 
 #### 2.字段、含义、取值
 
-| 字段                | 类型   | 必填 | 含义               | 开发阶段取值                                                 |
-| ------------------- | ------ | ---: | ------------------ | ------------------------------------------------------------ |
-| `version`           | string |   是 | 接口版本           | 固定 `"1.0"`                                                 |
-| `deviceId`          | string |   是 | 目标设备 ID        | `crawler_00000001`                                           |
-| `productType`       | string |   是 | 设备类型           | `crawler`                                                    |
-| `timestamp`         | string |   是 | 消息生成时间       | RFC3339 毫秒级 UTC 时间                                      |
-| `linearSpeedCms`    | number |   是 | 线速度，单位 cm/s  | 取值范围 `[-20,20]`，前进为正、后退为负，由方向控制按钮决定固定速度 |
-| `angularSpeedRadps` | number |   是 | 角速度，单位 rad/s | 取值范围 `[-0.5,0.5]`，正负方向由 Robot 端统一定义，由左右转向按钮决定固定角速度 |
-| `durationMs`        | int    |   是 | 当前控制量有效时间 | 第一版为 `300`ms                                             |
+
+| 字段                | 类型   | 必填 | 含义               | 开发阶段取值                                                                    |
+| ------------------- | ------ | ---: | ------------------ | ------------------------------------------------------------------------------- |
+| `version`           | string |   是 | 接口版本           | 固定`"1.0"`                                                                     |
+| `deviceId`          | string |   是 | 目标设备 ID        | `crawler_00000001`                                                              |
+| `productType`       | string |   是 | 设备类型           | `crawler`                                                                       |
+| `timestamp`         | string |   是 | 消息生成时间       | RFC3339 毫秒级 UTC 时间                                                         |
+| `linearSpeedCms`    | number |   是 | 线速度，单位 cm/s  | 取值范围`[-20,20]`，前进为正、后退为负，由方向控制按钮决定固定速度              |
+| `angularSpeedRadps` | number |   是 | 角速度，单位 rad/s | 取值范围`[-0.5,0.5]`，正负方向由 Robot 端统一定义，由左右转向按钮决定固定角速度 |
+| `durationMs`        | int    |   是 | 当前控制量有效时间 | 第一版为`300`ms                                                                 |
 
 #### 3.遥控规则
 
-| 项目                | 规则                                                         |
-| ------------------- | ------------------------------------------------------------ |
-| 控制方式            | 上下左右方向按钮，根据按钮类型发送固定线速度或角速度         |
-| 前进                | 发送固定正线速度 `linearSpeedCms`，角速度为 0                |
-| 后退                | 发送固定负线速度 `linearSpeedCms`，角速度为 0                |
-| 左转                | 发送固定负角速度 `angularSpeedRadps`，线速度为 0             |
-| 右转                | 发送固定正角速度 `angularSpeedRadps`，线速度为 0             |
-| 启用条件            | Robot 在线、未急停，且当前不处于自动运行状态                 |
-| 按下前 0.5 秒       | APP 不发送 `remote` 消息                                     |
-| 持续按住超过 0.5 秒 | APP 按 20Hz 持续发送，约每 50ms 一次                         |
+
+| 项目                | 规则                                                                              |
+| ------------------- | --------------------------------------------------------------------------------- |
+| 控制方式            | 上下左右方向按钮，根据按钮类型发送固定线速度或角速度                              |
+| 前进                | 发送固定正线速度`linearSpeedCms`，角速度为 0                                      |
+| 后退                | 发送固定负线速度`linearSpeedCms`，角速度为 0                                      |
+| 左转                | 发送固定正角速度`angularSpeedRadps`，线速度为 0                                   |
+| 右转                | 发送固定负角速度`angularSpeedRadps`，线速度为 0                                   |
+| 启用条件            | Robot 在线、未急停，且当前不处于自动运行状态                                      |
+| 按下前 0.5 秒       | APP 不发送`remote` 消息                                                           |
+| 持续按住超过 0.5 秒 | APP 按 20Hz 持续发送，约每 50ms 一次                                              |
 | 松开按钮            | 松开按钮时，APP 先发送一条线速度和角速度均为 0 的 remote 消息，然后停止周期发送。 |
-| 自动运行状态        | Robot 不处理 `remote` 消息                                   |
-| 自动运行切换        | Robot 进入自动任务前，应停止接受 remote 控制                 |
-| 急停状态            | Robot 拒绝执行 `remote` 消息                                 |
-| 超时停车            | Robot 超过 1000ms 未收到新消息时自动停车                     |
-| 回执                | `remote` 为高频消息，不返回 `cmd_ack`                        |
-| 多按钮同时按下      | 同时按多个方向按钮时 APP 发送零速度并提示用户                |
+| 自动运行状态        | Robot 不处理`remote` 消息                                                         |
+| 自动运行切换        | Robot 进入自动任务前，应停止接受 remote 控制                                      |
+| 急停状态            | Robot 拒绝执行`remote` 消息                                                       |
+| 超时停车            | Robot 超过 1000ms 未收到新消息时自动停车                                          |
+| 回执                | `remote` 为高频消息，不返回 `cmd_ack`                                             |
+| 多按钮同时按下      | 同时按多个方向按钮时 APP 发送零速度并提示用户                                     |
 
 #### 4.完整示例
 
@@ -197,7 +205,7 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
   "productType": "crawler",
   "timestamp": "2026-07-08T07:51:00.123Z",
   "linearSpeedCms": 0.0,
-  "angularSpeedRadps": -0.5,
+  "angularSpeedRadps": 0.5,
   "durationMs": 300
 }
 ```
@@ -211,7 +219,7 @@ APP 向 Robot 发布 `cmd` 和 `remote` 消息。
   "productType": "crawler",
   "timestamp": "2026-07-08T07:51:00.123Z",
   "linearSpeedCms": 0.0,
-  "angularSpeedRadps": 0.5,
+  "angularSpeedRadps": -0.5,
   "durationMs": 300
 }
 ```
@@ -248,6 +256,7 @@ device/{productType}/{deviceId}/pose
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                       |
 | ------------ | ------------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/heartbeat` |
@@ -259,15 +268,17 @@ Robot 周期性上报心跳，APP 根据心跳判断设备在线状态。
 
 #### 3.字段、含义、取值
 
+
 | 字段          | 类型    | 必填 | 含义         | 开发阶段取值            |
 | ------------- | ------- | ---: | ------------ | ----------------------- |
-| `version`     | string  |   是 | 接口版本     | 固定 `"1.0"`            |
+| `version`     | string  |   是 | 接口版本     | 固定`"1.0"`             |
 | `deviceId`    | string  |   是 | 设备 ID      | `crawler_00000001`      |
 | `productType` | string  |   是 | 设备类型     | `crawler`               |
 | `timestamp`   | string  |   是 | 消息生成时间 | RFC3339 毫秒级 UTC 时间 |
-| `online`      | boolean |   是 | 在线状态     | 正常上报为 `true`       |
+| `online`      | boolean |   是 | 在线状态     | 正常上报为`true`        |
 
 #### 4.规则
+
 
 | 项目           | 规则                                                 |
 | -------------- | ---------------------------------------------------- |
@@ -293,6 +304,7 @@ Robot 周期性上报心跳，APP 根据心跳判断设备在线状态。
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                    |
 | ------------ | ---------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/status` |
@@ -304,9 +316,10 @@ Robot 周期性上报 APP 页面需要展示的基础设备状态信息。
 
 #### 3.字段、含义、取值
 
+
 | 字段                | 类型   | 必填 | 含义         | 开发阶段取值                                      |
 | ------------------- | ------ | ---: | ------------ | ------------------------------------------------- |
-| `version`           | string |   是 | 接口版本     | 固定 `"1.0"`                                      |
+| `version`           | string |   是 | 接口版本     | 固定`"1.0"`                                       |
 | `deviceId`          | string |   是 | 设备 ID      | `crawler_00000001`                                |
 | `productType`       | string |   是 | 设备类型     | `crawler`                                         |
 | `timestamp`         | string |   是 | 消息生成时间 | RFC3339 毫秒级 UTC 时间                           |
@@ -342,6 +355,7 @@ Robot 周期性上报 APP 页面需要展示的基础设备状态信息。
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                     |
 | ------------ | ----------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/cmd_ack` |
@@ -353,9 +367,10 @@ Robot 返回 `cmd` 命令的最终执行结果。
 
 #### 3.字段、含义、取值
 
+
 | 字段          | 类型        | 必填 | 含义        | 开发阶段取值                            |
 | ------------- | ----------- | ---: | ----------- | --------------------------------------- |
-| `version`     | string      |   是 | 接口版本    | 固定 `"1.0"`                            |
+| `version`     | string      |   是 | 接口版本    | 固定`"1.0"`                             |
 | `deviceId`    | string      |   是 | 设备 ID     | `crawler_00000001`                      |
 | `productType` | string      |   是 | 设备类型    | `crawler`                               |
 | `timestamp`   | string      |   是 | 回执时间    | RFC3339 毫秒级 UTC 时间                 |
@@ -363,7 +378,7 @@ Robot 返回 `cmd` 命令的最终执行结果。
 | `cmd`         | string      |   是 | 对应命令    | `start`、`stop`、`estop`、`clear_estop` |
 | `ackStatus`   | string      |   是 | 执行结果    | `success`、`failed`                     |
 | `message`     | string      |   否 | 结果说明    | APP 直接展示                            |
-| `errorCode`   | string/null |   否 | 错误码      | 成功时为 `null`                         |
+| `errorCode`   | string/null |   否 | 错误码      | 成功时为`null`                          |
 
 #### 4.规则
 
@@ -394,6 +409,7 @@ Robot 返回 `cmd` 命令的最终执行结果。
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                 |
 | ------------ | ------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/map` |
@@ -412,9 +428,10 @@ Robot 或 Cloud 在地图生成、上传或更新后，通过 MQTT 通知 APP �
 
 #### 3.字段、含义、取值
 
+
 | 字段            | 类型   | 必填 | 含义         | 开发阶段取值                              |
 | --------------- | ------ | ---: | ------------ | ----------------------------------------- |
-| `version`       | string |   是 | 接口版本     | 固定 `"1.0"`                              |
+| `version`       | string |   是 | 接口版本     | 固定`"1.0"`                               |
 | `deviceId`      | string |   是 | 设备 ID      | `crawler_00000001`                        |
 | `productType`   | string |   是 | 设备类型     | `crawler`                                 |
 | `timestamp`     | string |   是 | 消息生成时间 | RFC3339 毫秒级 UTC 时间                   |
@@ -427,15 +444,16 @@ Robot 或 Cloud 在地图生成、上传或更新后，通过 MQTT 通知 APP �
 
 #### 4.规则
 
-| 项目       | 规则                                                         |
-| ---------- | ------------------------------------------------------------ |
-| 传输方式   | MQTT 只传文件信息，不传完整地图 JSON                         |
-| 地图格式   | APP 下载 Robot 端标准地图 JSON                               |
+
+| 项目       | 规则                                                                                                |
+| ---------- | --------------------------------------------------------------------------------------------------- |
+| 传输方式   | MQTT 只传文件信息，不传完整地图 JSON                                                                |
+| 地图格式   | APP 下载 Robot 端标准地图 JSON                                                                      |
 | 地图更新   | 地图内容变化时，mapVersion递增，并与地图 JSON 中 version 保持一致,mapVersion由Robot地图管理模块维护 |
-| APP 缓存   | APP 根据 `mapId + mapVersion` 保存地图                       |
-| 下载失败   | APP 提示失败并支持重新下载                                   |
-| 文件校验   | 提供 `checksum` 时，APP 下载后进行校验                       |
-| 地图一致性 | APP 根据 mapId + mapVersion 判断本地缓存地图是否有效         |
+| APP 缓存   | APP 根据`mapId + mapVersion` 保存地图                                                               |
+| 下载失败   | APP 提示失败并支持重新下载                                                                          |
+| 文件校验   | 提供`checksum` 时，APP 下载后进行校验                                                               |
+| 地图一致性 | APP 根据 mapId + mapVersion 判断本地缓存地图是否有效                                                |
 
 #### 5.完整示例
 
@@ -458,6 +476,7 @@ Robot 或 Cloud 在地图生成、上传或更新后，通过 MQTT 通知 APP �
 
 #### 1.Topic 名称
 
+
 | 类型         | Topic                                  |
 | ------------ | -------------------------------------- |
 | 通用名       | `device/{productType}/{deviceId}/pose` |
@@ -471,24 +490,26 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 
 #### 3.字段、含义、取值
 
-| 字段          | 类型   | 必填 | 含义           | 开发阶段取值                                                 |
-| ------------- | ------ | ---: | -------------- | ------------------------------------------------------------ |
-| `version`     | string |   是 | 接口版本       | 固定 `"1.0"`                                                 |
-| `deviceId`    | string |   是 | 设备 ID        | `crawler_00000001`                                           |
-| `productType` | string |   是 | 设备类型       | `crawler`                                                    |
-| `timestamp`   | string |   是 | 消息生成时间   | RFC3339 毫秒级 UTC 时间                                      |
-| `mapId`       | int    |   是 | 当前使用地图ID | 接收值                                                       |
-| `mapVersion`  | int    |   是 | 当前地图版本号 | 与地图 JSON 中 version 字段保持一致                          |
-| `blockId`     | int    |   否 | 当前区域编号   | Robot 地图 JSON 中对应 block 编号，例如 `1`                  |
-| `cellId`      | int    |   否 | 当前单元编号   | Robot 地图 JSON 中对应 cell 编号，例如 `12`                  |
-| `cellRow`     | int    |   否 | 单元所在行     | 当前 cell 在 block 网格中的行编号，例如 `0`                  |
-| `cellCol`     | int    |   否 | 单元所在列     | 当前 cell 在 block 网格中的列编号，例如 `2`                  |
-| `innerRow`    | int    |   否 | 内部网格行     | 当前机器人所在内部网格行，例如 `1`                           |
-| `innerCol`    | int    |   否 | 内部网格列     | 当前机器人所在内部网格列，例如 `5`                           |
-| `headingCode` | int    |   否 | 离散朝向编号   | `0~3`，与 Robot 端方向枚举保持一致                           |
+
+| 字段          | 类型   | 必填 | 含义           | 开发阶段取值                                                                   |
+| ------------- | ------ | ---: | -------------- | ------------------------------------------------------------------------------ |
+| `version`     | string |   是 | 接口版本       | 固定`"1.0"`                                                                    |
+| `deviceId`    | string |   是 | 设备 ID        | `crawler_00000001`                                                             |
+| `productType` | string |   是 | 设备类型       | `crawler`                                                                      |
+| `timestamp`   | string |   是 | 消息生成时间   | RFC3339 毫秒级 UTC 时间                                                        |
+| `mapId`       | int    |   是 | 当前使用地图ID | 接收值                                                                         |
+| `mapVersion`  | int    |   是 | 当前地图版本号 | 与地图 JSON 中 version 字段保持一致                                            |
+| `blockId`     | int    |   否 | 当前区域编号   | Robot 地图 JSON 中对应 block 编号，例如`1`                                     |
+| `cellId`      | int    |   否 | 当前单元编号   | Robot 地图 JSON 中对应 cell 编号，例如`12`                                     |
+| `cellRow`     | int    |   否 | 单元所在行     | 当前 cell 在 block 网格中的行编号，例如`0`                                     |
+| `cellCol`     | int    |   否 | 单元所在列     | 当前 cell 在 block 网格中的列编号，例如`2`                                     |
+| `innerRow`    | int    |   否 | 内部网格行     | 当前机器人所在内部网格行，例如`1`                                              |
+| `innerCol`    | int    |   否 | 内部网格列     | 当前机器人所在内部网格列，例如`5`                                              |
+| `headingCode` | int    |   否 | 离散朝向编号   | `0~3`，与 Robot 端方向枚举保持一致                                             |
 | `heading`     | string |   否 | 朝向描述       | `block_u_positive`、`block_u_negative`、`block_v_positive`、`block_v_negative` |
 
 #### headingCode 定义
+
 
 | headingCode | heading            | 含义                     |
 | ----------- | ------------------ | ------------------------ |
@@ -499,13 +520,14 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 
 #### 4.规则
 
-| 项目     | 规则                                                         |
-| -------- | ------------------------------------------------------------ |
-| 地图关联 | pose 中 mapId + mapVersion 必须与 APP 当前地图一致           |
-| 轨迹保存 | APP 保存最近 10 秒 pose 数据绘制轨迹                         |
-| 地图变化 | mapId 或 mapVersion 变化时重新加载地图                       |
+
+| 项目     | 规则                                                                      |
+| -------- | ------------------------------------------------------------------------- |
+| 地图关联 | pose 中 mapId + mapVersion 必须与 APP 当前地图一致                        |
+| 轨迹保存 | APP 保存最近 10 秒 pose 数据绘制轨迹                                      |
+| 地图变化 | mapId 或 mapVersion 变化时重新加载地图                                    |
 | 定位失效 | Robot 无法定位时，blockId、cellId等位置字段可以为空，APP 不绘制机器人位置 |
-| 定位恢复 | Robot 恢复定位后重新发送有效位置字段                         |
+| 定位恢复 | Robot 恢复定位后重新发送有效位置字段                                      |
 
 #### 5.完整示例
 
@@ -547,8 +569,6 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 
 ![image-20260711213053743](./%E7%AC%AC%E4%B8%80%E7%89%88APP%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90%E6%96%87%E6%A1%A3.assets/image-20260711213053743.png)
 
-
-
 ### 1.1 页面功能
 
 登录页用于完成用户身份认证。用户输入账号和密码后，APP 调用 HTTP 登录接口；认证成功后保存登录凭证并进入设备列表页，认证失败时显示错误提示。
@@ -565,6 +585,7 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 ```
 
 ### 1.3 UI 与数据对应关系
+
 
 | UI 内容      | 数据来源或处理                                  |
 | ------------ | ----------------------------------------------- |
@@ -588,8 +609,6 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 
 ![image-20260711213129433](./%E7%AC%AC%E4%B8%80%E7%89%88APP%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90%E6%96%87%E6%A1%A3.assets/image-20260711213129433.png)
 
-
-
 ### 2.1 页面功能
 
 设备列表页展示当前登录账号有权限查看和控制的设备。设备基础信息和最近一次缓存状态由 HTTP 接口提供；用户选择设备后，APP 保存当前设备的 `deviceId`、`productType` 和设备名称，并进入工作台主页。
@@ -608,17 +627,18 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 
 ### 2.3 UI 与数据对应关系
 
-| UI 内容      | 数据来源或处理                                  |
-| ------------ | ----------------------------------------------- |
-| 设备名称     | HTTP 设备列表接口                               |
-| 设备编号     | HTTP 返回的 `deviceId`                          |
-| 设备类型     | HTTP 返回的 `productType`，APP 转换为中文名称   |
-| 在线状态     | HTTP 返回的最近缓存状态                         |
-| 工作状态     | HTTP 返回的最近缓存状态                         |
-| 电量         | HTTP 返回的最近缓存状态                         |
-| 设备图片     | 根据 `productType` 使用本地资源或 HTTP 图片地址 |
-| 进入设备按钮 | 保存当前设备信息并进入工作台主页                |
-| 不可操作状态 | 设备离线、无控制权限或设备状态异常时禁用        |
+
+| UI 内容      | 数据来源或处理                                 |
+| ------------ | ---------------------------------------------- |
+| 设备名称     | HTTP 设备列表接口                              |
+| 设备编号     | HTTP 返回的`deviceId`                          |
+| 设备类型     | HTTP 返回的`productType`，APP 转换为中文名称   |
+| 在线状态     | HTTP 返回的最近缓存状态                        |
+| 工作状态     | HTTP 返回的最近缓存状态                        |
+| 电量         | HTTP 返回的最近缓存状态                        |
+| 设备图片     | 根据`productType` 使用本地资源或 HTTP 图片地址 |
+| 进入设备按钮 | 保存当前设备信息并进入工作台主页               |
+| 不可操作状态 | 设备离线、无控制权限或设备状态异常时禁用       |
 
 ### 2.4 实际应用规则
 
@@ -632,8 +652,6 @@ APP 根据 mapId、mapVersion、blockId、cellId、innerRow、innerCol 和 headi
 ## 3.工作台主页
 
 ![ChatGPT Image 2026年7月16日 22_15_41](./%E7%AC%AC%E4%BA%8C%E7%89%88APP%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90%E6%96%87%E6%A1%A3%20.assets/ChatGPT%20Image%202026%E5%B9%B47%E6%9C%8816%E6%97%A5%2022_15_41.png)
-
-
 
 ### 3.1 页面功能
 
@@ -653,6 +671,7 @@ device/{productType}/{deviceId}/pose
 
 ### 3.3 UI 与接口对应关系
 
+
 | UI 内容      | 对应接口或字段                                     |
 | ------------ | -------------------------------------------------- |
 | 在线状态     | `heartbeat.online`；超过 3000ms 未收到心跳显示离线 |
@@ -663,11 +682,11 @@ device/{productType}/{deviceId}/pose
 | 角速度       | `status.angularSpeedRadps`                         |
 | 设备状态     | `status.deviceStatus`                              |
 | 运动状态     | `status.movementStatus`                            |
-| 开始运行按钮 | 发布 `cmd=start`                                   |
-| 停止运行按钮 | 发布 `cmd=stop`                                    |
-| 紧急停止按钮 | 发布 `cmd=estop`                                   |
-| 解除急停按钮 | 发布 `cmd=clear_estop`                             |
-| 最近命令记录 | APP 根据已发送命令及对应 `cmd_ack` 结果生成        |
+| 开始运行按钮 | 发布`cmd=start`                                    |
+| 停止运行按钮 | 发布`cmd=stop`                                     |
+| 紧急停止按钮 | 发布`cmd=estop`                                    |
+| 解除急停按钮 | 发布`cmd=clear_estop`                              |
+| 最近命令记录 | APP 根据已发送命令及对应`cmd_ack` 结果生成         |
 | 返回设备列表 | 页面跳转，不调用 MQTT 业务接口                     |
 
 ### 3.4 命令数据流
@@ -685,6 +704,7 @@ device/{productType}/{deviceId}/pose
 ```
 
 ### 3.5 状态转换规则
+
 
 | 命令          | 预期状态变化                                  |
 | ------------- | --------------------------------------------- |
@@ -706,8 +726,6 @@ device/{productType}/{deviceId}/pose
 
 ![image-20260711213236278](./%E7%AC%AC%E4%B8%80%E7%89%88APP%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90%E6%96%87%E6%A1%A3.assets/image-20260711213236278.png)
 
-
-
 ### 4.1 页面功能
 
 地图页用于显示当前设备对应的地图、机器人位置、机器人朝向以及最近 10 秒轨迹。
@@ -727,6 +745,7 @@ APP 接收 map 消息
 ```
 
 ### 4.3 UI 与接口对应关系
+
 
 | UI 内容        | 对应接口或字段                         |
 | -------------- | -------------------------------------- |
@@ -809,6 +828,7 @@ controlMode=manual
 
 ### 5.3 UI 与接口对应关系
 
+
 | UI 内容      | 对应接口或处理                                 |
 | ------------ | ---------------------------------------------- |
 | 在线状态     | `heartbeat.online`                             |
@@ -817,7 +837,7 @@ controlMode=manual
 | 线速度       | `status.linearSpeedCms`                        |
 | 角速度       | `status.angularSpeedRadps`                     |
 | 普通停止按钮 | `remote.linearSpeedCms=0, angularSpeedRadps=0` |
-| 紧急停止按钮 | 发布 `cmd=estop`                               |
+| 紧急停止按钮 | 发布`cmd=estop`                                |
 | 前进按钮     | `remote.linearSpeedCms=20`                     |
 | 后退按钮     | `remote.linearSpeedCms=-20`                    |
 | 左转按钮     | `remote.angularSpeedRadps=-0.5`                |
@@ -866,19 +886,18 @@ controlMode=manual
 
 ![image-20260711213334805](./%E7%AC%AC%E4%B8%80%E7%89%88APP%E9%9C%80%E6%B1%82%E5%88%86%E6%9E%90%E6%96%87%E6%A1%A3.assets/image-20260711213334805.png)
 
-
-
 ### 6.1 页面功能
 
 状态详情页集中展示当前设备的基础信息和实时运行状态。
 
 ### 6.2 UI 与接口对应关系
 
+
 | UI 内容      | 对应接口或来源                        |
 | ------------ | ------------------------------------- |
 | 设备名称     | HTTP 设备列表接口                     |
-| 设备编号     | 当前选择的 `deviceId`                 |
-| 设备类型     | 当前选择的 `productType`              |
+| 设备编号     | 当前选择的`deviceId`                  |
+| 设备类型     | 当前选择的`productType`               |
 | 地图版本     | `map.mapId`                           |
 | 在线状态     | `heartbeat`                           |
 | 工作状态     | `status.workStatus`                   |
@@ -909,12 +928,13 @@ controlMode=manual
 
 ### 7.2 触发条件
 
-| 弹窗状态 | 触发条件                                |
-| -------- | --------------------------------------- |
-| 发送中   | APP 已发布 `cmd`，正在等待 `cmd_ack`    |
-| 成功     | 收到相同 `cmdId` 且 `ackStatus=success` |
-| 失败     | 收到相同 `cmdId` 且 `ackStatus=failed`  |
-| 超时     | 5 秒内未收到相同 `cmdId` 的 `cmd_ack`   |
+
+| 弹窗状态 | 触发条件                               |
+| -------- | -------------------------------------- |
+| 发送中   | APP 已发布`cmd`，正在等待 `cmd_ack`    |
+| 成功     | 收到相同`cmdId` 且 `ackStatus=success` |
+| 失败     | 收到相同`cmdId` 且 `ackStatus=failed`  |
+| 超时     | 5 秒内未收到相同`cmdId` 的 `cmd_ack`   |
 
 ### 7.3 数据匹配规则
 
