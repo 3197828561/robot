@@ -41,13 +41,12 @@ object MissionControlPolicy {
                 mission.operationalMode == "auto" &&
                 !awaitingStartStatus,
             canStop = activeMission,
-            canPause = runState in setOf("starting", "running"),
-            canResume = runState == "paused",
+            canPause = activeMission && runState in setOf("starting", "running"),
+            canResume = activeMission && runState == "paused",
             canReplan = activeMission && mission.taskKind == "coverage",
             canEstop = safety !in setOf("estop", "clearing_estop"),
             canClearEstop = safety == "estop" && !awaitingClearEstopStatus,
             canManual = safeForMission &&
-                mission.operationalMode != "manual" &&
                 !manualCommandAccepted &&
                 !commandInFlight,
             canAuto = mission.operationalMode == "manual" && !commandInFlight,
@@ -98,4 +97,25 @@ object MissionStatusDisplay {
             }
         }
     }
+}
+
+object MissionCommandErrorDisplay {
+    fun text(errorCode: String?): String? = when (errorCode) {
+        null, "" -> null
+        "INVALID_PAYLOAD" -> "命令参数不符合接口要求"
+        "UNSUPPORTED_VERSION" -> "Robot 不支持当前接口版本"
+        "DEVICE_MISMATCH" -> "命令设备与 Robot 不匹配"
+        "UNSUPPORTED_CMD" -> "Robot 不支持该命令"
+        "MISSION_SERVICE_UNAVAILABLE" -> "任务服务不可用"
+        "MISSION_SERVICE_TIMEOUT" -> "任务服务响应超时"
+        "MISSION_SERVICE_ERROR" -> "任务服务调用失败"
+        "MISSION_INVALID_COMMAND" -> "任务命令无效"
+        "MISSION_INVALID_REQUEST" -> "任务请求参数无效"
+        "MISSION_BUSY" -> "Robot 当前有任务正在处理"
+        "MISSION_NOT_FOUND" -> "目标任务不存在或已失效"
+        "MISSION_ILLEGAL_STATE" -> "当前任务状态不允许执行该操作"
+        "MISSION_INTERNAL_ERROR" -> "任务模块内部错误"
+        "MISSION_REJECTED" -> "任务层拒绝了该操作"
+        else -> "Robot 返回错误"
+    }?.let { "$it（$errorCode）" }
 }

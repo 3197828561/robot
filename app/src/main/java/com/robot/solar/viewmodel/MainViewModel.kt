@@ -60,7 +60,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         addSource(mqttConnected) { refresh() }
         addSource(deviceOnline) {
-            if (it != true) stopRemote(sendZero = true)
+            if (it != true) {
+                _remoteModeAccepted.value = false
+                stopRemote(sendZero = true)
+            }
             refresh()
         }
         addSource(status) {
@@ -214,7 +217,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand("start", "请先加载有效地图")
             return
         }
-        if (map.mapId !in 0..UINT32_MAX || map.version < 0) {
+        if (map.mapId !in 0..UINT32_MAX || map.version !in 0..UINT32_MAX) {
             rejectCommand("start", "地图编号或版本超出协议范围")
             return
         }
@@ -427,32 +430,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return
             }
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            if (ack.cmd == "manual") {
-                _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
-            } else if (ack.cmd == "auto" && status == CommandStatus.SUCCESS) {
-                _remoteModeAccepted.postValue(false)
-            }
-            if (ack.cmd == "start") {
-                val mission = missionState.value
-                val stateAlreadyUpdated = !mission?.missionId.isNullOrBlank() &&
-                    mission?.runState in setOf(
-                        "starting",
-                        "running",
-                        "paused",
-                        "succeeded",
-                        "failed",
-                        "canceled"
-                    )
-                _awaitingStartStatus.postValue(
-                    status == CommandStatus.SUCCESS && !stateAlreadyUpdated
-                )
-            }
-            if (ack.cmd == "clear_estop") {
-                _awaitingClearEstopStatus.postValue(
-                    status == CommandStatus.SUCCESS &&
-                        missionState.value?.safetyState != "normal"
-                )
-            }
+            applyAckSideEffects(ack, status)
             finishPendingCommand(status, null, ack.errorCode)
             if (ack.cmd == "manual" && status == CommandStatus.SUCCESS && pendingExitToAuto) {
                 viewModelScope.launch {
@@ -466,18 +444,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             }
-        } else if (pending == null) {
+        } else if (
+            pending == null &&
+            ack.cmdId == lastPreparedCommand?.cmdId &&
+            ack.cmd == lastPreparedCommand?.cmd
+        ) {
+            // ACK 可能在本地等待超时后到达。仍需关联到原命令，并以 Robot 的
+            // 最终同步受理结果收敛重试入口，不能把成功 ACK 留成“可重试”。
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
+            applyAckSideEffects(ack, status)
+            _retryAvailable.postValue(status == CommandStatus.FAILED)
             _commandState.postValue(
                 CommandUiState(
                     cmdId = ack.cmdId,
                     cmd = ack.cmd,
                     status = status,
-                    errorCode = ack.errorCode
+                    errorCode = ack.errorCode,
+                    paramsSummary = lastCommandParamsSummary
                 )
             )
         } else {
-            LogUtils.device("忽略非当前命令回执：cmdId=${ack.cmdId}")
+            LogUtils.device("忽略无法关联的命令回执：cmdId=${ack.cmdId}")
+        }
+    }
+
+    private fun applyAckSideEffects(ack: CmdAckMessage, status: CommandStatus) {
+        if (ack.cmd == "manual") {
+            _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
+        } else if (ack.cmd == "auto" && status == CommandStatus.SUCCESS) {
+            _remoteModeAccepted.postValue(false)
+        }
+        if (ack.cmd == "start") {
+            val mission = missionState.value
+            val stateAlreadyUpdated = !mission?.missionId.isNullOrBlank() &&
+                mission?.runState in setOf(
+                    "starting",
+                    "running",
+                    "paused",
+                    "succeeded",
+                    "failed",
+                    "canceled"
+                )
+            _awaitingStartStatus.postValue(
+                status == CommandStatus.SUCCESS && !stateAlreadyUpdated
+            )
+        }
+        if (ack.cmd == "clear_estop") {
+            _awaitingClearEstopStatus.postValue(
+                status == CommandStatus.SUCCESS &&
+                    missionState.value?.safetyState != "normal"
+            )
         }
     }
 

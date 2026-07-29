@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import com.robot.solar.BuildConfig
 import com.robot.solar.databinding.ActivityMainBinding
 import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.map.MapPosition
@@ -29,6 +30,7 @@ import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.log.LogActivity
 import com.robot.solar.viewmodel.ControlAvailability
 import com.robot.solar.viewmodel.MainViewModel
+import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
@@ -303,6 +305,8 @@ class MainActivity : AppCompatActivity() {
                 "设备名称：${viewModel.deviceDisplayName ?: "--"}",
                 "设备编号：${viewModel.deviceId ?: "--"}",
                 "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}",
+                "APP版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                "任务接口能力：${BuildConfig.MISSION_COMMAND_API_CAPABILITY}",
                 "工作状态：--",
                 "控制模式：--",
                 "电量：--",
@@ -341,6 +345,8 @@ class MainActivity : AppCompatActivity() {
                 "设备名称：${viewModel.deviceDisplayName ?: "--"}",
                 "设备编号：${viewModel.deviceId ?: "--"}",
                 "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}",
+                "APP版本：${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                "任务接口能力：${BuildConfig.MISSION_COMMAND_API_CAPABILITY}",
                 "工作状态：${ProtocolDisplayText.workStatus(this, status.workStatus)}",
                 "控制模式：${ProtocolDisplayText.controlMode(this, status.controlMode)}",
                 "电量：${status.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}",
@@ -449,7 +455,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (state.status != CommandStatus.IDLE && state.status != CommandStatus.SENDING) {
             val feedback = ProtocolDisplayText.commandFeedback(this, state.cmd, state.status)
-            val detail = state.errorCode ?: state.message
+            val detail = MissionCommandErrorDisplay.text(state.errorCode) ?: state.message
             Toast.makeText(
                 this,
                 if (detail.isNullOrBlank()) feedback else "$feedback（$detail）",
@@ -489,7 +495,7 @@ class MainActivity : AppCompatActivity() {
             command = state.cmd ?: commandName,
             params = state.paramsSummary ?: "--",
             status = statusText,
-            description = commandDescription(state.cmd, state.status)
+            description = commandDescription(state)
         )
         val existing = commandHistory.indexOfFirst { it.key == key }
         if (existing >= 0) {
@@ -513,8 +519,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun commandDescription(cmd: String?, status: CommandStatus): String {
-        val actionText = when (cmd) {
+    private fun commandDescription(state: CommandUiState): String {
+        val actionText = when (state.cmd) {
             "start" -> "覆盖任务已被任务层受理"
             "stop" -> "停止请求已被任务层受理"
             "pause" -> "暂停请求已被任务层受理"
@@ -526,10 +532,11 @@ class MainActivity : AppCompatActivity() {
             "clear_estop" -> "解除急停请求已受理，等待安全状态恢复"
             else -> "等待命令执行"
         }
-        return when (status) {
+        return when (state.status) {
             CommandStatus.SENDING -> "命令已发送，等待回执"
             CommandStatus.SUCCESS -> actionText
-            CommandStatus.FAILED -> "设备未确认执行"
+            CommandStatus.FAILED ->
+                MissionCommandErrorDisplay.text(state.errorCode) ?: state.message ?: "设备未确认执行"
             CommandStatus.TIMEOUT -> "回执等待超时"
             CommandStatus.CONNECTION_LOST -> "连接中断，结果未知"
             CommandStatus.IDLE -> "--"

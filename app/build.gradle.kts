@@ -24,8 +24,8 @@ android {
         applicationId = "com.robot.solar"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -36,6 +36,7 @@ android {
         buildConfigField("String", "MQTT_PASSWORD", "\"${prop("mqtt.password", "")}\"")
         buildConfigField("String", "MQTT_DEFAULT_PRODUCT_TYPE", "\"${prop("mqtt.product_type", "crawler")}\"")
         buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "crawler_00000001")}\"")
+        buildConfigField("String", "MISSION_COMMAND_API_CAPABILITY", "\"mission_command_v2\"")
     }
 
     buildTypes {

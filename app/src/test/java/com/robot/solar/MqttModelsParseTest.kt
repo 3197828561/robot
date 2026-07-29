@@ -190,20 +190,23 @@ class MqttModelsParseTest {
     }
 
     @Test
-    fun targetMissionCommand_containsLatestMissionId() {
-        val prepared = CommandPayloadFactory.create(
-            version = "1.0",
-            cmdId = "cmd_pause_000001",
-            deviceId = "crawler_00000001",
-            productType = "crawler",
-            timestamp = "2026-07-26T08:30:00.123Z",
-            cmd = "pause",
-            params = mapOf("targetMissionId" to "mission-42"),
-            gson = gson
-        )
-        val params = JsonParser.parseString(prepared.payload).asJsonObject["params"].asJsonObject
+    fun allTargetMissionCommands_containOnlyLatestMissionId() {
+        listOf("stop", "pause", "resume", "replan").forEach { command ->
+            val prepared = CommandPayloadFactory.create(
+                version = "1.0",
+                cmdId = "cmd_${command}_000001",
+                deviceId = "crawler_00000001",
+                productType = "crawler",
+                timestamp = "2026-07-26T08:30:00.123Z",
+                cmd = command,
+                params = mapOf("targetMissionId" to "mission-42"),
+                gson = gson
+            )
+            val params = JsonParser.parseString(prepared.payload).asJsonObject["params"].asJsonObject
 
-        assertEquals("mission-42", params["targetMissionId"].asString)
+            assertEquals(1, params.size())
+            assertEquals("mission-42", params["targetMissionId"].asString)
+        }
     }
 
     @Test
@@ -224,5 +227,20 @@ class MqttModelsParseTest {
             assertEquals(command, payload["cmd"].asString)
             assertEquals(0, payload["params"].asJsonObject.size())
         }
+    }
+
+    @Test
+    fun coverageCommand_supportsUint32UpperBounds() {
+        val params = CoverageCommandParams(
+            mapId = 4_294_967_295L,
+            mapVersion = 4_294_967_295L,
+            useCurrentPose = true,
+            targetBlockIds = listOf(1),
+            globalPlan = true
+        )
+        val coverage = JsonParser.parseString(gson.toJson(params)).asJsonObject
+
+        assertEquals(4_294_967_295L, coverage["mapId"].asLong)
+        assertEquals(4_294_967_295L, coverage["mapVersion"].asLong)
     }
 }

@@ -89,7 +89,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
         override fun onLost(network: Network) {
             _mqttConnected.postValue(false)
-            _deviceOnline.postValue(false)
+            markRobotOffline(clearHeartbeat = true)
             LogUtils.system("网络连接已丢失")
         }
     }
@@ -163,8 +163,23 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         } finally {
             client = null
             _mqttConnected.postValue(false)
-            _deviceOnline.postValue(false)
+            markRobotOffline(clearHeartbeat = true)
         }
+    }
+
+    /**
+     * 清除只能由当前 Robot 会话证明的运行态。
+     *
+     * 断线后不得保留 missionId 或手动模式确认，否则心跳早于 status 恢复时，
+     * App 可能把旧任务 ID 用于新会话。地图缓存不属于会话运行态，继续保留。
+     */
+    private fun markRobotOffline(clearHeartbeat: Boolean) {
+        if (clearHeartbeat) lastHeartbeatMillis = null
+        _deviceOnline.postValue(false)
+        _batteryPercent.postValue(null)
+        _status.postValue(null)
+        _missionState.postValue(MissionState())
+        _pose.postValue(null)
     }
 
     private fun clearDeviceState() {
@@ -263,7 +278,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
                 override fun connectionLost(cause: Throwable?) {
                     _mqttConnected.postValue(false)
-                    _deviceOnline.postValue(false)
+                    markRobotOffline(clearHeartbeat = true)
                     LogUtils.system("设备连接已断开，正在尝试恢复")
                     scheduleReconnect()
                 }
@@ -310,6 +325,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         lastHeartbeatMillis = now
                         _lastHeartbeatAt.postValue(now)
                         _deviceOnline.postValue(true)
+                    } else {
+                        markRobotOffline(clearHeartbeat = true)
                     }
                     LogUtils.device(if (msg.online == true) "收到设备在线心跳" else "收到设备离线通知")
                 }
@@ -401,7 +418,13 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             while (true) {
                 val last = lastHeartbeatMillis
                 val online = last != null && System.currentTimeMillis() - last <= HEARTBEAT_TIMEOUT_MS
-                _deviceOnline.postValue(online)
+                if (online) {
+                    _deviceOnline.postValue(true)
+                } else if (last != null) {
+                    markRobotOffline(clearHeartbeat = true)
+                } else {
+                    _deviceOnline.postValue(false)
+                }
                 delay(500)
             }
         }
@@ -514,7 +537,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         map: MapMessage,
         url: String,
         mapId: Long,
-        version: Int,
+        version: Long,
         forceDownload: Boolean
     ): Pair<String, PvMap> {
         require(url.startsWith("https://") || url.startsWith("http://")) { "mapJsonUrl 不是 HTTP/HTTPS" }
@@ -548,7 +571,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         return cacheFile.absolutePath to pvMap
     }
 
-    private fun cacheFileFor(mapId: Long, version: Int): File {
+    private fun cacheFileFor(mapId: Long, version: Long): File {
         val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         val deviceId = boundDeviceId ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
         return File(File(File(appContext.cacheDir, MAP_CACHE_DIR), productType), deviceId)

@@ -151,6 +151,17 @@ MQTT cmd/cmd_ack/status 抓包
 Robot MQTT/ROS 两侧日志
 ```
 
+当前第三版 APP 发布标识固定为：
+
+```text
+App versionName/versionCode: 1.2.0 / 3
+mission command API capability: mission_command_v2
+```
+
+上述标识已写入 `BuildConfig.MISSION_COMMAND_API_CAPABILITY` 并展示在状态详情页。
+它用于发布记录和与 Robot 镜像成对验收，不代表 APP 可以自动识别旧 Robot；在
+HTTP 设备接口增加能力字段之前，发布负责人仍必须执行 Robot 固件白名单校验。
+
 ## 5. 服务器部署入口
 
 当前服务器已经有 EMQX，**不要直接运行默认 Compose**。

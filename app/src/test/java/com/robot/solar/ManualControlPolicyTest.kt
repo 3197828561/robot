@@ -3,6 +3,7 @@ package com.robot.solar
 import com.robot.solar.ui.main.ManualDirection
 import com.robot.solar.viewmodel.ManualControlPolicy
 import com.robot.solar.viewmodel.MissionControlPolicy
+import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
 import com.robot.solar.network.mqtt.MissionState
 import org.junit.Assert.assertEquals
@@ -92,6 +93,25 @@ class ManualControlPolicyTest {
         )
         assertTrue(paused.canResume)
         assertTrue(paused.canRetry)
+
+        val staleRunStateWithoutMissionId = MissionControlPolicy.compute(
+            connected = true,
+            online = true,
+            mission = MissionState(
+                runState = "running",
+                operationalMode = "auto",
+                safetyState = "normal"
+            ),
+            manualCommandAccepted = false,
+            awaitingStartStatus = false,
+            awaitingClearEstopStatus = false,
+            commandInFlight = false,
+            retryAvailable = false
+        )
+        assertFalse(staleRunStateWithoutMissionId.canStop)
+        assertFalse(staleRunStateWithoutMissionId.canPause)
+        assertFalse(staleRunStateWithoutMissionId.canResume)
+        assertFalse(staleRunStateWithoutMissionId.canReplan)
     }
 
     @Test
@@ -195,5 +215,41 @@ class ManualControlPolicyTest {
                 awaitingClearEstop = true
             )
         )
+    }
+
+    @Test
+    fun missionCommandErrors_haveExplicitServiceAndRejectionMessages() {
+        assertEquals(
+            "任务服务不可用（MISSION_SERVICE_UNAVAILABLE）",
+            MissionCommandErrorDisplay.text("MISSION_SERVICE_UNAVAILABLE")
+        )
+        assertEquals(
+            "任务服务响应超时（MISSION_SERVICE_TIMEOUT）",
+            MissionCommandErrorDisplay.text("MISSION_SERVICE_TIMEOUT")
+        )
+        assertEquals(
+            "任务层拒绝了该操作（MISSION_REJECTED）",
+            MissionCommandErrorDisplay.text("MISSION_REJECTED")
+        )
+        listOf(
+            "INVALID_PAYLOAD",
+            "UNSUPPORTED_VERSION",
+            "DEVICE_MISMATCH",
+            "UNSUPPORTED_CMD",
+            "MISSION_SERVICE_UNAVAILABLE",
+            "MISSION_SERVICE_TIMEOUT",
+            "MISSION_SERVICE_ERROR",
+            "MISSION_INVALID_COMMAND",
+            "MISSION_INVALID_REQUEST",
+            "MISSION_BUSY",
+            "MISSION_NOT_FOUND",
+            "MISSION_ILLEGAL_STATE",
+            "MISSION_INTERNAL_ERROR",
+            "MISSION_REJECTED"
+        ).forEach { errorCode ->
+            val display = MissionCommandErrorDisplay.text(errorCode)
+            assertTrue("Missing display for $errorCode", !display.isNullOrBlank())
+            assertTrue("Display must retain $errorCode", display!!.contains(errorCode))
+        }
     }
 }

@@ -67,7 +67,7 @@ data class MapMessage(
     val timestamp: String?,
     val mapId: Long?,
     val mapName: String?,
-    val mapVersion: Int?,
+    val mapVersion: Long?,
     val mapJsonUrl: String?,
     val fileSizeBytes: Long?,
     val checksum: String?
@@ -79,7 +79,7 @@ data class PoseMessage(
     val productType: String?,
     val timestamp: String?,
     val mapId: Long?,
-    val mapVersion: Int?,
+    val mapVersion: Long?,
     val blockId: Long?,
     val cellId: Long?,
     val cellRow: Int?,
@@ -154,7 +154,7 @@ data class CoverageStart(
 
 data class CoverageCommandParams(
     val mapId: Long,
-    val mapVersion: Int,
+    val mapVersion: Long,
     val useCurrentPose: Boolean,
     val start: CoverageStart? = null,
     val targetBlockIds: List<Long>,
