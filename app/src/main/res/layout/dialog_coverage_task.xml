@@ -105,19 +105,25 @@
             </com.google.android.material.textfield.TextInputLayout>
         </LinearLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
+        <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="目标 blockId（逗号分隔）">
+            android:text="选择目标区域"
+            android:textStyle="bold" />
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etTargetBlockIds"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="text"
-                android:singleLine="true" />
-        </com.google.android.material.textfield.TextInputLayout>
+        <com.google.android.material.checkbox.MaterialCheckBox
+            android:id="@+id/cbSelectAllBlocks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="全选可清洁区域" />
+
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chipGroupTargetBlocks"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingBottom="4dp" />
 
         <com.google.android.material.checkbox.MaterialCheckBox
             android:id="@+id/cbGlobalPlan"

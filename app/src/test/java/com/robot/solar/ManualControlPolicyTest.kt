@@ -81,6 +81,61 @@ class ManualControlPolicyTest {
     }
 
     @Test
+    fun debugBypass_onlyRequiresOnlineAndSuccessfulManualAckForRemoteControl() {
+        assertTrue(
+            ManualControlPolicy.isAllowed(
+                connected = true,
+                online = true,
+                operationalMode = "auto",
+                safetyState = "estop",
+                manualCommandAccepted = true,
+                debugBypass = true
+            )
+        )
+        assertFalse(
+            ManualControlPolicy.isAllowed(
+                connected = true,
+                online = true,
+                operationalMode = "manual",
+                safetyState = "normal",
+                manualCommandAccepted = false,
+                debugBypass = true
+            )
+        )
+    }
+
+    @Test
+    fun debugBypass_enablesAllCommandButtonsWhileDeviceIsOnline() {
+        val availability = MissionControlPolicy.compute(
+            connected = true,
+            online = true,
+            mission = MissionState(
+                runState = "failed",
+                operationalMode = "manual",
+                safetyState = "estop"
+            ),
+            manualCommandAccepted = false,
+            awaitingStartStatus = true,
+            awaitingClearEstopStatus = true,
+            commandInFlight = true,
+            retryAvailable = true,
+            debugBypass = true
+        )
+
+        assertTrue(availability.canStart)
+        assertTrue(availability.canStop)
+        assertTrue(availability.canPause)
+        assertTrue(availability.canResume)
+        assertTrue(availability.canReplan)
+        assertTrue(availability.canEstop)
+        assertTrue(availability.canClearEstop)
+        assertTrue(availability.canManual)
+        assertTrue(availability.canAuto)
+        assertFalse(availability.canRemote)
+        assertTrue(availability.canRetry)
+    }
+
+    @Test
     fun missionButtons_followRobotRunModeAndSafetyState() {
         val idle = MissionControlPolicy.compute(
             connected = true,

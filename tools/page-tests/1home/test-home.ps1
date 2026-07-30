@@ -30,7 +30,7 @@ Test-PageLayoutIds @("app/src/main/res/layout/dialog_coverage_task.xml") @(
     "tvCoverageMap", "cbUseCurrentPose", "groupCoverageStart",
     "etStartBlockId", "etStartCellRow", "etStartCellCol",
     "etStartInnerRow", "etStartInnerCol", "etStartHeading",
-    "etTargetBlockIds", "cbGlobalPlan"
+    "cbSelectAllBlocks", "chipGroupTargetBlocks", "cbGlobalPlan"
 )
 Test-PageSourcePatterns "app/src/main/java/com/robot/solar/ui/main/MainActivity.kt" @{
     "返回设备列表按钮" = 'btnDeviceList\.setOnClickListener.*shutdownMqtt\(\).*DeviceListActivity'
@@ -50,7 +50,9 @@ Test-PageSourcePatterns "app/src/main/java/com/robot/solar/ui/main/MainActivity.
     "手动导航" = 'navRemote\.setOnClickListener\s*\{\s*showPage\(Page\.REMOTE\)'
     "详情导航" = 'navStatus\.setOnClickListener\s*\{\s*showPage\(Page\.STATUS\)'
     "开始弹窗当前位姿" = 'cbUseCurrentPose\.isChecked'
-    "开始弹窗目标区域" = 'etTargetBlockIds\.text'
+    "开始弹窗目标区域多选" = 'chipGroupTargetBlocks\.childCount'
+    "开始弹窗全选" = 'cbSelectAllBlocks\.setOnCheckedChangeListener'
+    "命令ACK弹窗" = 'commandAckEvent\.observe'
     "开始弹窗显式起点" = 'CoverageStart\(\s*blockId\s*=\s*blockId'
     "开始弹窗全局规划" = 'globalPlan\s*=\s*dialogBinding\.cbGlobalPlan\.isChecked'
     "在线状态字段" = 'tvHomeOnline.*deviceOnline'
@@ -67,8 +69,9 @@ Test-PageSourcePatterns "app/src/main/java/com/robot/solar/viewmodel/MainViewMod
     "start地图参数" = 'CoverageCommandParams\(\s*mapId\s*=\s*map\.mapId'
     "start目标校验" = 'targetBlockIds.*distinct'
     "start起点校验" = 'selection\.useCurrentPose'
-    "任务命令目标missionId" = 'mapOf\("targetMissionId"\s*to\s*missionId\)'
-    "命令防抖" = 'if\s*\(!debounce\(\)\)'
+    "任务命令目标missionId" = 'mapOf\("targetMissionId"\s*to\s*missionId\.orEmpty\(\)\)'
+    "正式包命令防抖" = '!BuildConfig\.DEBUG_CONTROL_BYPASS\s*&&\s*!debounce\(\)'
+    "调试包并发命令" = '!BuildConfig\.DEBUG_CONTROL_BYPASS\s*&&\s*pendingCommands\.isNotEmpty\(\)'
     "命令发布" = 'mqtt\.publishCmd\(command\)'
 }
 

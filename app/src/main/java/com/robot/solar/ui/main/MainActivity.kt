@@ -18,6 +18,7 @@ import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.map.MapPosition
 import com.robot.solar.map.PvMapParser
+import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageStart
@@ -34,6 +35,7 @@ import com.robot.solar.viewmodel.MainViewModel
 import com.robot.solar.viewmodel.ManualSpeedSettings
 import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
+import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -51,6 +53,8 @@ class MainActivity : AppCompatActivity() {
     private var currentMapState = MapUiState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
+    private val pendingAckDialogs = ArrayDeque<CmdAckMessage>()
+    private var ackDialogShowing = false
     private var currentPage = Page.HOME
 
     private val clockRunnable = object : Runnable {
@@ -126,6 +130,9 @@ class MainActivity : AppCompatActivity() {
             bindStatus(viewModel.status.value)
         }
         viewModel.commandState.observe(this) { bindCommandState(it) }
+        viewModel.commandAckEvent.observe(this) { event ->
+            event.consume()?.let(::enqueueCommandAckDialog)
+        }
         viewModel.recentCommandLogs.observe(this) { bindCommandRows(it.orEmpty()) }
         viewModel.controlsEnabled.observe(this) { bindAvailability(it) }
         viewModel.awaitingStartStatus.observe(this) { bindStatus(viewModel.status.value) }
@@ -221,11 +228,39 @@ class MainActivity : AppCompatActivity() {
         }
         val dialogBinding = DialogCoverageTaskBinding.inflate(layoutInflater)
         dialogBinding.tvCoverageMap.text = "地图：${map.mapId}  版本：${map.version}"
-        dialogBinding.etTargetBlockIds.setText(
-            map.blocks
-                .filter { it.cleanable && it.blockId > 0 }
-                .joinToString(",") { it.blockId.toString() }
-        )
+        val targetBlocks = map.blocks
+            .filter { it.cleanable && it.blockId > 0 }
+            .sortedBy { it.blockId }
+        var updatingTargetSelection = false
+        targetBlocks.forEach { block ->
+            dialogBinding.chipGroupTargetBlocks.addView(
+                Chip(this).apply {
+                    text = "区域 ${block.blockId}"
+                    isCheckable = true
+                    isChecked = true
+                    tag = block.blockId
+                    setOnCheckedChangeListener { _, _ ->
+                        if (updatingTargetSelection) return@setOnCheckedChangeListener
+                        val allChecked = (0 until dialogBinding.chipGroupTargetBlocks.childCount)
+                            .map { dialogBinding.chipGroupTargetBlocks.getChildAt(it) as Chip }
+                            .all(Chip::isChecked)
+                        if (dialogBinding.cbSelectAllBlocks.isChecked != allChecked) {
+                            updatingTargetSelection = true
+                            dialogBinding.cbSelectAllBlocks.isChecked = allChecked
+                            updatingTargetSelection = false
+                        }
+                    }
+                }
+            )
+        }
+        dialogBinding.cbSelectAllBlocks.setOnCheckedChangeListener { _, checked ->
+            if (updatingTargetSelection) return@setOnCheckedChangeListener
+            updatingTargetSelection = true
+            (0 until dialogBinding.chipGroupTargetBlocks.childCount)
+                .map { dialogBinding.chipGroupTargetBlocks.getChildAt(it) as Chip }
+                .forEach { it.isChecked = checked }
+            updatingTargetSelection = false
+        }
         currentPose?.let { pose ->
             dialogBinding.etStartBlockId.setText(pose.blockId?.toString().orEmpty())
             dialogBinding.etStartCellRow.setText(pose.cellRow?.toString().orEmpty())
@@ -245,22 +280,16 @@ class MainActivity : AppCompatActivity() {
             .setTitle("配置覆盖任务")
             .setView(dialogBinding.root)
             .setNegativeButton("取消", null)
-            .setPositiveButton("发送 START", null)
+            .setPositiveButton("开始任务", null)
             .create()
         dialog.setOnShowListener {
             dialog.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-                val rawTargets = dialogBinding.etTargetBlockIds.text?.toString().orEmpty().trim()
-                val targets = runCatching {
-                    rawTargets
-                        .split(Regex("[,，\\s]+"))
-                        .filter(String::isNotBlank)
-                        .map(String::toLong)
-                }.getOrElse {
-                    Toast.makeText(this, "目标 blockId 格式错误", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
+                val targets = (0 until dialogBinding.chipGroupTargetBlocks.childCount)
+                    .map { dialogBinding.chipGroupTargetBlocks.getChildAt(it) as Chip }
+                    .filter(Chip::isChecked)
+                    .map { it.tag as Long }
                 if (targets.isEmpty()) {
-                    Toast.makeText(this, "至少填写一个目标 blockId", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "至少选择一个目标区域", Toast.LENGTH_SHORT).show()
                     return@setOnClickListener
                 }
 
@@ -470,7 +499,10 @@ class MainActivity : AppCompatActivity() {
         val commandName = ProtocolDisplayText.commandName(this, state.cmd)
         val statusText = ProtocolDisplayText.commandStatus(this, state.status)
         binding.tvCommandState.text = "最近操作：$commandName · $statusText"
-        if (state.status != CommandStatus.IDLE && state.status != CommandStatus.SENDING) {
+        if (
+            state.status in setOf(CommandStatus.TIMEOUT, CommandStatus.CONNECTION_LOST) ||
+            (state.status == CommandStatus.FAILED && !state.message.isNullOrBlank())
+        ) {
             val feedback = ProtocolDisplayText.commandFeedback(this, state.cmd, state.status)
             val detail = MissionCommandErrorDisplay.text(state.errorCode) ?: state.message
             Toast.makeText(
@@ -479,6 +511,39 @@ class MainActivity : AppCompatActivity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    private fun enqueueCommandAckDialog(ack: CmdAckMessage) {
+        pendingAckDialogs.addLast(ack)
+        showNextCommandAckDialog()
+    }
+
+    private fun showNextCommandAckDialog() {
+        if (ackDialogShowing) return
+        val ack = pendingAckDialogs.removeFirstOrNull() ?: return
+        ackDialogShowing = true
+        val success = ack.ackStatus == "success"
+        val commandName = ProtocolDisplayText.commandName(this, ack.cmd)
+        val detail = MissionCommandErrorDisplay.text(ack.errorCode)
+            ?: ack.message?.takeIf { it.isNotBlank() }
+            ?: if (success) "机器人已成功受理" else "机器人拒绝了该命令"
+        MaterialAlertDialogBuilder(this)
+            .setTitle(if (success) "$commandName：成功" else "$commandName：失败")
+            .setMessage(
+                buildString {
+                    append(detail)
+                    if (!ack.cmdId.isNullOrBlank()) append("\n\n命令 ID：${ack.cmdId}")
+                }
+            )
+            .setPositiveButton("知道了", null)
+            .create()
+            .apply {
+                setOnDismissListener {
+                    ackDialogShowing = false
+                    showNextCommandAckDialog()
+                }
+                show()
+            }
     }
 
     private fun bindHomeStatusCard(status: StatusMessage?) {

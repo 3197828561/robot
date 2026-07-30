@@ -70,8 +70,8 @@ powershell -ExecutionPolicy Bypass -File tools\page-tests\test-manual-control.ps
 
 | ID | 功能 | 前置条件 | 数据流/预期 |
 |---|---|---|---|
-| `btnEnterManualMode` | 请求手动模式 | MQTT 连接、机器人在线、`safetyState=normal`、无在途命令 | 发布 `cmd=manual`；等待 ACK 和 status，不能在 ACK 前启用方向键 |
-| `btnReturnAutoMode` | 切回自动模式 | 当前 `operationalMode=manual` | 先普通零速停止，再发布 `cmd=auto`；最终等 status=auto |
+| `btnEnterManualMode` | 请求手动模式 | Debug 包只要求 MQTT 连接、机器人在线；Release 包仍校验安全状态和在途命令 | 发布 `cmd=manual`；Debug 包以成功 ACK 解锁全部手动方向控制 |
+| `btnReturnAutoMode` | 切回自动模式 | Debug 包在线即可点击；Release 包要求当前 `operationalMode=manual` | 先普通零速停止，再发布 `cmd=auto`；成功 ACK 后立即禁用方向控制 |
 | `btnRemoteStop` | 普通停止 | `canRemote=true` | 取消持续发送并发布零速帧；不改变 safetyState |
 | `btnRemoteEmergency` | 紧急停止 | `canEstop=true` | 取消本地输入且不先发送普通零速，然后发布 `cmd=estop`；最终以 `status.safetyState=estop` 为准 |
 
@@ -90,9 +90,9 @@ powershell -ExecutionPolicy Bypass -File tools\page-tests\test-manual-control.ps
 
 关键安全行为：
 
-- 未满足 MQTT/在线/manual/normal/ACK 确认时触摸不会发送速度；
+- Debug 包未满足 MQTT/在线/`manual` 成功 ACK 时触摸不会发送速度；Release 包额外要求 `operationalMode=manual` 且 `safetyState=normal`；
 - 按住不足 500 ms 不开始运动；
-- 有效长按后约每 100 ms 重发一帧，Robot 使用 `durationMs=300` 看门狗；
+- 有效长按后约每 50 ms 重发一帧（约 20 Hz），payload 保留 `durationMs=300`；
 - 松开立即发零速；
 - 同时按多个方向会普通停止并提示；
 - APP 退到后台时取消方向输入并普通停止；
@@ -157,7 +157,7 @@ Topic：`device/{productType}/{deviceId}/remote`，QoS 0，非 retained。
 ## 9. 人工验收清单
 
 1. 页面导航不自动弹出 manual 命令结果。
-2. 离线、MQTT 断开、安全非 normal、auto 模式时方向键均不可运动。
+2. Debug 包验证离线/MQTT 断开时不可运动，`manual` 成功 ACK 后可运动，`auto` 成功 ACK 后立即禁用；Release 包另验证 mode/safety 严格条件。
 3. 三个预设、四个加减按钮、两个滑条均测试最小/最大/中间值和重启持久化。
 4. 进入 manual 后分别长按前后左右，订阅 `/remote` 验证四组正负号。
 5. 每次松开必须观察到零速帧；离页、切后台、断线也必须停止。

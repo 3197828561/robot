@@ -64,13 +64,13 @@ Robot MQTT heartbeat/status/map/pose/cmd_ack
 | 返回设备列表 `btnDeviceList` | `MainActivity.bindControls` | 关闭当前 MQTT，会话设备信息仍在本地；启动 `DeviceListActivity` 并结束工作台 | 点击后出现设备列表；不应继续保留旧 MQTT 订阅 | `MainActivity.kt`、`DeviceListActivity.kt` |
 | 重新加载地图 `btnReloadMap` | `viewModel.retryMapDownload()` | 读取当前 `MapMessage`；有 URL 时重新 HTTP 下载，否则尝试当前设备地图缓存 | 状态依次为“正在加载/地图已加载”或明确失败；旧地图可按实现继续显示 | `MainActivity.kt`、`MainViewModel.kt`、`CloudCommMqttManager.retryMapDownload()` |
 | 预览居中 `btnCenterRobot` | `mapPreviewView.centerRobot()` | 只改变预览画布 viewport，不发网络消息 | 有有效 pose 时机器人居中；无 pose 时复位并提示 | `MainActivity.kt`、地图 View 类 |
-| 开始任务 `btnStart` | `showCoverageTaskDialog()` | 从 `MapUiState.pvMap` 和最新 `PoseMessage`填充弹窗；确认后生成 `CoverageTaskSelection`，由 `startCoverage()` 校验并发布 `start` | 仅地图 READY、在线、MQTT 已连接、任务状态允许时启用 | `MainActivity.kt`、`dialog_coverage_task.xml`、`MainViewModel.startCoverage()` |
-| 停止 `btnStopRun` | `sendMissionCommand("stop")` | 从最新 `MissionState.missionId` 生成 `params.targetMissionId`，发布 `cmd=stop` | 必须存在活动任务编号；ACK 只代表受理，最终看 `status.runState` | `MainActivity.kt`、`MainViewModel.sendMissionCommand()` |
+| 开始任务 `btnStart` | `showCoverageTaskDialog()` | 从 `MapUiState.pvMap` 和最新 `PoseMessage`填充弹窗；确认后生成 `CoverageTaskSelection`，由 `startCoverage()` 校验并发布 `start` | Debug 包在线即启用，但仍须地图 READY 才能构造参数；Release 包执行完整状态校验 | `MainActivity.kt`、`dialog_coverage_task.xml`、`MainViewModel.startCoverage()` |
+| 停止 `btnStopRun` | `sendMissionCommand("stop")` | 从最新 `MissionState.missionId` 生成 `params.targetMissionId`，发布 `cmd=stop` | Debug 包无任务 ID 时也会发送空 ID 供 Robot 返回真实 ACK；Release 包要求有效任务 | `MainActivity.kt`、`MainViewModel.sendMissionCommand()` |
 | 暂停 `btnPause` | 同上，`pause` | 使用最新任务编号 | 运行中可用；最终应收到 paused 状态 | 同上 |
 | 恢复 `btnResume` | 同上，`resume` | 使用最新任务编号 | 暂停状态可用；最终应回到 running | 同上 |
 | 重新规划 `btnReplan` | 同上，`replan` | 使用最新任务编号 | 任务存在且策略允许；观察 phase/activeAction/status | 同上 |
-| 紧急停止 `btnEmergency` | `sendCmd("estop")` | 发布独立急停命令，不依赖任务编号 | 在线正常状态可用；Robot 回传 `safetyState=estop` 后其它运动按钮禁用 | `MainActivity.kt`、`MainViewModel.sendCmd()` |
-| 解除急停 `btnClearEstop` | `sendCmd("clear_estop")` | 发布清除急停命令；UI 进入等待安全状态回流 | 仅 `safetyState=estop` 时可用；最终必须由 Robot 上报 `normal` | `MainViewModel` 的 awaitingClearEstop 流程 |
+| 紧急停止 `btnEmergency` | `sendCmd("estop")` | 发布独立急停命令，不依赖任务编号 | Debug 包在线即启用；Release 包按安全状态启用 | `MainActivity.kt`、`MainViewModel.sendCmd()` |
+| 解除急停 `btnClearEstop` | `sendCmd("clear_estop")` | 发布清除急停命令；UI 进入等待安全状态回流 | Debug 包在线即启用；Release 包仅 `safetyState=estop` 时启用 | `MainViewModel` 的 awaitingClearEstop 流程 |
 | 重试 `btnRetryCommand` | `retryLastCommand()` | 复用上次失败命令的已准备 payload/参数摘要，重新生成发布流程 | 只在失败/超时且连接恢复、无在途命令时可用 | `MainViewModel.retryLastCommand()` |
 | 更多日志 `btnViewLogs` | 启动 `LogActivity` | Room 的结构化日志由 `LogListViewModel` 观察并展示 | 页面可打开、筛选、搜索、详情、清空 | `MainActivity.kt`、`ui/log`、`LogRepository` |
 | 底部四项导航 | `showPage(Page.*)` | 同一 Activity 内切换四个 section，不新建 Activity | 离开手动页会发送零速停止；进入手动页不会自动切模式 | `MainActivity.showPage()` |
@@ -85,7 +85,7 @@ Robot MQTT heartbeat/status/map/pose/cmd_ack
 | `etStartCellRow/Col` | 起点 cell 行列 | 默认来自 pose；必须存在 | `params.start.cellRow/cellCol` |
 | `etStartInnerRow/Col` | cell 内部坐标 | 默认来自 pose；不得越界 | `params.start.innerRow/innerCol` |
 | `etStartHeading` | 朝向编码 | 默认来自 pose；只允许 0..3 | `params.start.heading` |
-| `etTargetBlockIds` | 目标区域 | 默认填充可清洁 block；非空、正数、去重且存在 | `params.targetBlockIds` |
+| `cbSelectAllBlocks/chipGroupTargetBlocks` | 目标区域 | 地图中的可清洁区域生成多选项，默认全选；至少选择一个 | `params.targetBlockIds` |
 | `cbGlobalPlan` | 全局规划 | 用户选择 | `params.globalPlan` |
 
 ## 4. 字段逐项说明
@@ -122,6 +122,8 @@ Robot MQTT heartbeat/status/map/pose/cmd_ack
 - 是否存在在途命令；
 - 是否有可重试命令。
 
+当前 Debug 包设置 `BuildConfig.DEBUG_CONTROL_BYPASS=true`：MQTT 已连接且设备在线时，七个任务控制按钮均可点击，不采用任务状态、安全状态、在途命令之间的 APP 互斥；每条命令独立跟踪 `cmdId`，关联的 `cmd_ack` 按到达顺序弹窗。Release 包该开关为 false，继续使用上述完整状态策略。
+
 修改甲方按钮启用规则时，优先修改 `MissionControlPolicy.compute()` 并同步 `ManualControlPolicyTest`，不要只在 XML 中设置 enabled。
 
 ## 6. 甲方变更定位
@@ -138,8 +140,8 @@ Robot MQTT heartbeat/status/map/pose/cmd_ack
 
 1. 登录并选择与模拟器相同的 deviceId/productType。
 2. 启动 robot-sim，确认在线、八个状态字段和地图字段均不是错误的固定值。
-3. 逐个任务按钮验证“启用条件—发送中—ACK—最终 status—日志记录”。
-4. 对 start 覆盖：当前位置、显式起点、空目标、重复目标、越界 heading、不可清洁 block。
+3. Debug 包在线后连续点击七个任务按钮，验证每条下行 `cmdId` 都能独立关联 ACK 弹窗；Release 包另测严格启用条件。
+4. 对 start 覆盖：当前位置、显式起点、区域多选/全选、空目标、越界 heading。
 5. 断开 MQTT 和停止 heartbeat，确认按钮禁用且不保留旧任务/手动授权。
 6. 验证最近命令表五列与日志详情一致。
 

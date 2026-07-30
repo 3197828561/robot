@@ -9,6 +9,7 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
+import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.ManualSpeedPreferences
 import com.robot.solar.entity.LogCategory
 import com.robot.solar.entity.LogSeverity
@@ -59,6 +60,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
+    private val _commandAckEvent = MutableLiveData<OneShotEvent<CmdAckMessage>>()
+    val commandAckEvent: LiveData<OneShotEvent<CmdAckMessage>> = _commandAckEvent
     private val _remoteModeAccepted = MutableLiveData(false)
     private val _awaitingStartStatus = MutableLiveData(false)
     val awaitingStartStatus: LiveData<Boolean> = _awaitingStartStatus
@@ -113,13 +116,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         get() = deviceRepository.currentProductType()
 
     private var lastCommandUptime: Long = 0L
-    private var waitingCmdId: String? = null
-    private var waitingCommand: PreparedCommand? = null
-    private var commandTimeoutJob: Job? = null
+    private val pendingCommands = linkedMapOf<String, PendingCommand>()
+    private val issuedCommands = linkedMapOf<String, PendingCommand>()
     private var lastPreparedCommand: PreparedCommand? = null
     private var lastCommandLabel: String? = null
     private var lastCommandParamsSummary: String? = null
-    private var pendingCommandParamsSummary: String? = null
     private var pendingExitToAuto = false
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
@@ -132,8 +133,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _awaitingStartStatus.postValue(false)
             _awaitingClearEstopStatus.postValue(false)
             stopRemote(sendZero = false, reason = "MQTT 连接中断")
-            if (waitingCmdId != null) {
-                finishPendingCommand(CommandStatus.CONNECTION_LOST, "MQTT 连接已断开", null)
+            pendingCommands.keys.toList().forEach { cmdId ->
+                finishPendingCommand(
+                    cmdId,
+                    CommandStatus.CONNECTION_LOST,
+                    "MQTT 连接已断开",
+                    null
+                )
             }
         }
     }
@@ -147,20 +153,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (state.safetyState == "normal") {
             _awaitingClearEstopStatus.postValue(false)
         }
-        if (state.operationalMode != "manual" || state.safetyState != "normal") {
-            stopRemote(sendZero = true, reason = "运行模式或安全状态变化")
-        }
-        if (state.operationalMode == "auto") {
-            _remoteModeAccepted.postValue(false)
-            pendingExitToAuto = false
-        } else if (
-            pendingExitToAuto &&
-            state.operationalMode == "manual" &&
-            waitingCmdId == null &&
-            mqttConnected.value == true &&
-            deviceOnline.value == true
-        ) {
-            sendPreparedCommand("切回自动模式", "auto")
+        if (!BuildConfig.DEBUG_CONTROL_BYPASS) {
+            if (state.operationalMode != "manual" || state.safetyState != "normal") {
+                stopRemote(sendZero = true, reason = "运行模式或安全状态变化")
+            }
+            if (state.operationalMode == "auto") {
+                _remoteModeAccepted.postValue(false)
+                pendingExitToAuto = false
+            } else if (
+                pendingExitToAuto &&
+                state.operationalMode == "manual" &&
+                pendingCommands.isEmpty() &&
+                mqttConnected.value == true &&
+                deviceOnline.value == true
+            ) {
+                sendPreparedCommand("切回自动模式", "auto")
+            }
         }
     }
 
@@ -371,15 +379,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun sendMissionCommand(label: String, action: String) {
         val missionId = missionState.value?.missionId?.takeIf { it.isNotBlank() }
-        if (missionId == null) {
+        if (missionId == null && !BuildConfig.DEBUG_CONTROL_BYPASS) {
             rejectCommand(action, "当前没有可操作的任务")
             return
         }
         sendPreparedCommand(
             label,
             action,
-            mapOf("targetMissionId" to missionId),
-            "targetMissionId=$missionId"
+            mapOf("targetMissionId" to missionId.orEmpty()),
+            "targetMissionId=${missionId.orEmpty()}"
         )
     }
 
@@ -390,7 +398,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun enterRemoteMode() {
         pendingExitToAuto = false
         _remoteModeAccepted.value = false
-        if (missionState.value?.safetyState != "normal") {
+        if (
+            !BuildConfig.DEBUG_CONTROL_BYPASS &&
+            missionState.value?.safetyState != "normal"
+        ) {
             rejectCommand("manual", "当前安全状态不允许进入手动模式")
             return
         }
@@ -402,8 +413,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _remoteModeAccepted.value = false
         pendingExitToAuto = true
         if (
+            BuildConfig.DEBUG_CONTROL_BYPASS &&
+            mqttConnected.value == true &&
+            deviceOnline.value == true
+        ) {
+            sendPreparedCommand("切回自动模式", "auto")
+            return
+        }
+        if (
             missionState.value?.operationalMode == "manual" &&
-            waitingCmdId == null &&
+            pendingCommands.isEmpty() &&
             mqttConnected.value == true &&
             deviceOnline.value == true
         ) {
@@ -418,11 +437,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand(command.cmd, "当前没有可重试的失败命令")
             return
         }
-        if (waitingCmdId != null || mqttConnected.value != true || deviceOnline.value != true) {
+        if (pendingCommands.isNotEmpty() || mqttConnected.value != true || deviceOnline.value != true) {
             rejectCommand(command.cmd, "设备未就绪，暂时不能重试")
             return
         }
-        pendingCommandParamsSummary = lastCommandParamsSummary
         _retryAvailable.value = false
         publishPreparedCommand(label, command, lastCommandParamsSummary)
     }
@@ -433,7 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         params: Any = emptyMap<String, Any?>(),
         paramsSummary: String = "{}"
     ) {
-        if (!debounce()) {
+        if (!BuildConfig.DEBUG_CONTROL_BYPASS && !debounce()) {
             rejectCommand(action, "操作过于频繁，请稍后重试")
             return
         }
@@ -441,7 +459,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand(action, "MQTT 未连接、设备离线或命令不受支持")
             return
         }
-        if (waitingCmdId != null) {
+        if (!BuildConfig.DEBUG_CONTROL_BYPASS && pendingCommands.isNotEmpty()) {
             rejectCommand(action, "上一条命令仍在等待回执")
             return
         }
@@ -453,7 +471,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastPreparedCommand = command
         lastCommandLabel = label
         lastCommandParamsSummary = paramsSummary
-        pendingCommandParamsSummary = paramsSummary
         _retryAvailable.value = false
         publishPreparedCommand(label, command, paramsSummary)
     }
@@ -463,8 +480,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         command: PreparedCommand,
         paramsSummary: String?
     ) {
-        waitingCmdId = command.cmdId
-        waitingCommand = command
+        val pending = PendingCommand(command, label, paramsSummary)
+        pendingCommands[command.cmdId] = pending
+        issuedCommands[command.cmdId] = pending
+        while (issuedCommands.size > MAX_ISSUED_COMMAND_HISTORY) {
+            issuedCommands.remove(issuedCommands.keys.first())
+        }
         _commandInFlight.value = true
         _commandState.value = CommandUiState(
             cmdId = command.cmdId,
@@ -485,12 +506,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = mqtt.publishCmd(command)
             if (result.published && result.cmdId != null) {
                 viewModelScope.launch {
-                    if (waitingCmdId == result.cmdId) {
-                        commandTimeoutJob?.cancel()
-                        commandTimeoutJob = viewModelScope.launch {
+                    pendingCommands[result.cmdId]?.let { active ->
+                        active.timeoutJob?.cancel()
+                        active.timeoutJob = viewModelScope.launch {
                             delay(5000)
-                            if (waitingCmdId == result.cmdId) {
-                                finishPendingCommand(CommandStatus.TIMEOUT, "$label 回执超时", null)
+                            if (pendingCommands.containsKey(result.cmdId)) {
+                                finishPendingCommand(
+                                    result.cmdId,
+                                    CommandStatus.TIMEOUT,
+                                    "$label 回执超时",
+                                    null
+                                )
                             }
                         }
                     }
@@ -505,8 +531,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             } else {
                 viewModelScope.launch {
-                    if (waitingCmdId == command.cmdId) {
-                        finishPendingCommand(CommandStatus.FAILED, "$label 发送失败", null)
+                    if (pendingCommands.containsKey(command.cmdId)) {
+                        finishPendingCommand(
+                            command.cmdId,
+                            CommandStatus.FAILED,
+                            "$label 发送失败",
+                            null
+                        )
                     }
                 }
             }
@@ -531,10 +562,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun handleCmdAck(ack: CmdAckMessage?) {
         ack ?: return
-        val pending = waitingCmdId
-        if (pending != null && ack.cmdId == pending) {
-            val pendingCmd = waitingCommand?.cmd
-            if (pendingCmd != null && ack.cmd != pendingCmd) {
+        val ackCmdId = ack.cmdId
+        val pending = ackCmdId?.let(pendingCommands::get)
+        if (pending != null) {
+            if (ack.cmd != pending.command.cmd) {
                 LogUtils.record(
                     StructuredLogDraft(
                         source = LogSource.ROBOT,
@@ -546,7 +577,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         result = "ignored",
                         summary = "忽略命令类型不匹配的回执",
                         detailJson = JSONObject()
-                            .put("expected", pendingCmd)
+                            .put("expected", pending.command.cmd)
                             .put("actual", ack.cmd)
                             .toString()
                     )
@@ -555,70 +586,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
             applyAckSideEffects(ack, status)
-            finishPendingCommand(status, null, ack.errorCode)
+            _commandAckEvent.postValue(OneShotEvent(ack))
+            finishPendingCommand(ackCmdId, status, null, ack.errorCode)
             if (ack.cmd == "manual" && status == CommandStatus.SUCCESS && pendingExitToAuto) {
                 viewModelScope.launch {
                     delay(400)
                     if (
                         pendingExitToAuto &&
                         missionState.value?.operationalMode == "manual" &&
-                        waitingCmdId == null
+                        pendingCommands.isEmpty()
                     ) {
                         sendPreparedCommand("切回自动模式", "auto")
                     }
                 }
             }
-        } else if (
-            pending == null &&
-            ack.cmdId == lastPreparedCommand?.cmdId &&
-            ack.cmd == lastPreparedCommand?.cmd
-        ) {
-            // ACK 可能在本地等待超时后到达。仍需关联到原命令，并以 Robot 的
-            // 最终同步受理结果收敛重试入口，不能把成功 ACK 留成“可重试”。
-            val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            applyAckSideEffects(ack, status)
-            _retryAvailable.postValue(status == CommandStatus.FAILED)
-            _commandState.postValue(
-                CommandUiState(
-                    cmdId = ack.cmdId,
-                    cmd = ack.cmd,
-                    status = status,
-                    errorCode = ack.errorCode,
-                    paramsSummary = lastCommandParamsSummary
-                )
-            )
-            recordCommandState(
-                cmdId = ack.cmdId,
-                action = ack.cmd,
-                label = lastCommandLabel ?: ack.cmd ?: "设备命令",
-                status = status,
-                message = ack.message,
-                errorCode = ack.errorCode,
-                paramsSummary = lastCommandParamsSummary
-            )
         } else {
-            LogUtils.record(
-                StructuredLogDraft(
-                    source = LogSource.ROBOT,
-                    category = LogCategory.COMMAND,
-                    eventType = "unmatched_ack",
-                    severity = LogSeverity.WARNING,
+            val issued = ackCmdId?.let(issuedCommands::get)
+            if (issued != null && ack.cmd == issued.command.cmd) {
+                // ACK 可能在本地等待超时后到达。仍需关联到原命令，并以 Robot 的
+                // 最终同步受理结果收敛重试入口，不能把成功 ACK 留成“可重试”。
+                val status =
+                    if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
+                applyAckSideEffects(ack, status)
+                _commandAckEvent.postValue(OneShotEvent(ack))
+                if (ack.cmdId == lastPreparedCommand?.cmdId) {
+                    _retryAvailable.postValue(status == CommandStatus.FAILED)
+                }
+                _commandState.postValue(
+                    CommandUiState(
+                        cmdId = ack.cmdId,
+                        cmd = ack.cmd,
+                        status = status,
+                        errorCode = ack.errorCode,
+                        paramsSummary = issued.paramsSummary
+                    )
+                )
+                recordCommandState(
                     cmdId = ack.cmdId,
                     action = ack.cmd,
-                    result = "ignored",
-                    summary = "忽略无法关联的命令回执",
-                    detailJson = JSONObject()
-                        .put("ackStatus", ack.ackStatus)
-                        .put("errorCode", ack.errorCode)
-                        .toString()
+                    label = issued.label,
+                    status = status,
+                    message = ack.message,
+                    errorCode = ack.errorCode,
+                    paramsSummary = issued.paramsSummary
                 )
-            )
+            } else {
+                LogUtils.record(
+                    StructuredLogDraft(
+                        source = LogSource.ROBOT,
+                        category = LogCategory.COMMAND,
+                        eventType = "unmatched_ack",
+                        severity = LogSeverity.WARNING,
+                        cmdId = ack.cmdId,
+                        action = ack.cmd,
+                        result = "ignored",
+                        summary = "忽略无法关联的命令回执",
+                        detailJson = JSONObject()
+                            .put("ackStatus", ack.ackStatus)
+                            .put("errorCode", ack.errorCode)
+                            .toString()
+                    )
+                )
+            }
         }
     }
 
     private fun applyAckSideEffects(ack: CmdAckMessage, status: CommandStatus) {
         if (ack.cmd == "manual") {
-            _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
+            if (status == CommandStatus.SUCCESS || !BuildConfig.DEBUG_CONTROL_BYPASS) {
+                _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
+            }
         } else if (ack.cmd == "auto" && status == CommandStatus.SUCCESS) {
             _remoteModeAccepted.postValue(false)
         }
@@ -645,41 +682,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun finishPendingCommand(status: CommandStatus, message: String?, errorCode: String?) {
-        val cmdId = waitingCmdId
-        val cmd = waitingCommand?.cmd
-        waitingCmdId = null
-        waitingCommand = null
-        _commandInFlight.postValue(false)
-        commandTimeoutJob?.cancel()
-        _retryAvailable.postValue(
-            status in setOf(
-                CommandStatus.FAILED,
-                CommandStatus.TIMEOUT,
-                CommandStatus.CONNECTION_LOST
+    private fun finishPendingCommand(
+        cmdId: String,
+        status: CommandStatus,
+        message: String?,
+        errorCode: String?
+    ) {
+        val pending = pendingCommands.remove(cmdId) ?: return
+        pending.timeoutJob?.cancel()
+        _commandInFlight.postValue(pendingCommands.isNotEmpty())
+        if (cmdId == lastPreparedCommand?.cmdId) {
+            _retryAvailable.postValue(
+                status in setOf(
+                    CommandStatus.FAILED,
+                    CommandStatus.TIMEOUT,
+                    CommandStatus.CONNECTION_LOST
+                )
             )
-        )
+        }
         _commandState.postValue(
             CommandUiState(
                 cmdId = cmdId,
-                cmd = cmd,
+                cmd = pending.command.cmd,
                 status = status,
                 message = message,
                 errorCode = errorCode,
-                paramsSummary = pendingCommandParamsSummary
+                paramsSummary = pending.paramsSummary
             )
         )
-        if (cmdId != null) {
-            recordCommandState(
-                cmdId = cmdId,
-                action = cmd,
-                label = lastCommandLabel ?: cmd.orEmpty(),
-                status = status,
-                message = message,
-                errorCode = errorCode,
-                paramsSummary = pendingCommandParamsSummary
-            )
-        }
+        recordCommandState(
+            cmdId = cmdId,
+            action = pending.command.cmd,
+            label = pending.label,
+            status = status,
+            message = message,
+            errorCode = errorCode,
+            paramsSummary = pending.paramsSummary
+        )
     }
 
     private fun recordCommandState(
@@ -737,7 +776,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     override fun onCleared() {
         stopRemote(sendZero = true)
-        commandTimeoutJob?.cancel()
+        pendingCommands.values.forEach { it.timeoutJob?.cancel() }
+        pendingCommands.clear()
         mqtt.lastCmdAck.removeObserver(cmdAckObserver)
         mqtt.mqttConnected.removeObserver(mqttConnectedObserver)
         mqtt.missionState.removeObserver(missionStateObserver)
@@ -746,7 +786,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun shutdownMqtt() {
         stopRemote(sendZero = true)
-        commandTimeoutJob?.cancel()
+        pendingCommands.values.forEach { it.timeoutJob?.cancel() }
+        pendingCommands.clear()
+        _commandInFlight.value = false
         mqtt.shutdown()
     }
 
@@ -776,7 +818,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             online = online,
             operationalMode = mission?.operationalMode,
             safetyState = mission?.safetyState,
-            manualCommandAccepted = _remoteModeAccepted.value == true
+            manualCommandAccepted = _remoteModeAccepted.value == true,
+            debugBypass = BuildConfig.DEBUG_CONTROL_BYPASS
         )
     }
 
@@ -792,12 +835,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             awaitingStartStatus = _awaitingStartStatus.value == true,
             awaitingClearEstopStatus = _awaitingClearEstopStatus.value == true,
             commandInFlight = _commandInFlight.value == true,
-            retryAvailable = _retryAvailable.value == true
+            retryAvailable = _retryAvailable.value == true,
+            debugBypass = BuildConfig.DEBUG_CONTROL_BYPASS
         )
     }
 
     companion object {
         private const val UINT32_MAX = 4_294_967_295L
+        private const val MAX_ISSUED_COMMAND_HISTORY = 50
         private val SUPPORTED_COMMANDS = setOf(
             "start",
             "stop",
@@ -811,6 +856,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 }
+
+class OneShotEvent<T>(private val value: T) {
+    private var consumed = false
+
+    @Synchronized
+    fun consume(): T? {
+        if (consumed) return null
+        consumed = true
+        return value
+    }
+}
+
+private data class PendingCommand(
+    val command: PreparedCommand,
+    val label: String,
+    val paramsSummary: String?,
+    var timeoutJob: Job? = null
+)
 
 data class ControlAvailability(
     val canStart: Boolean = false,

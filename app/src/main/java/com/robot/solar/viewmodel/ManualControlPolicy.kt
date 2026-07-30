@@ -8,8 +8,12 @@ object ManualControlPolicy {
         online: Boolean,
         operationalMode: String?,
         safetyState: String?,
-        manualCommandAccepted: Boolean
+        manualCommandAccepted: Boolean,
+        debugBypass: Boolean = false
     ): Boolean {
+        if (debugBypass) {
+            return connected && online && manualCommandAccepted
+        }
         return connected &&
             online &&
             operationalMode == "manual" &&
@@ -27,9 +31,25 @@ object MissionControlPolicy {
         awaitingStartStatus: Boolean,
         awaitingClearEstopStatus: Boolean,
         commandInFlight: Boolean,
-        retryAvailable: Boolean
+        retryAvailable: Boolean,
+        debugBypass: Boolean = false
     ): ControlAvailability {
         if (!connected || !online) return ControlAvailability()
+        if (debugBypass) {
+            return ControlAvailability(
+                canStart = true,
+                canStop = true,
+                canPause = true,
+                canResume = true,
+                canReplan = true,
+                canEstop = true,
+                canClearEstop = true,
+                canManual = true,
+                canAuto = true,
+                canRemote = manualCommandAccepted,
+                canRetry = retryAvailable
+            )
+        }
         val safety = mission.safetyState
         val runState = mission.runState
         val activeMission = !mission.missionId.isNullOrBlank() &&

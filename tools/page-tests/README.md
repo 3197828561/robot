@@ -2,6 +2,16 @@
 
 本目录把工作台拆成四个独立测试单元：
 
+这里的 PowerShell 脚本用于静态 UI/代码绑定审计和可选的 ADB 页面检查，不负责模拟 Robot
+业务反馈。需要人工操作 APP 并观察 `cmd/remote → cmd_ack/status/map/pose` 完整闭环时，
+请运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -Mode interactive
+```
+
+逐功能步骤见 `tools/robot-sim/FOUR_PAGE_MANUAL_TEST.md`。
+
 | 页面 | 脚本 | 数据流/修改指南 |
 |---|---|---|
 | 主页 | `1home/test-home.ps1` | `1home/home.md` |
