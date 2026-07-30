@@ -1,11 +1,11 @@
-param(
+﻿param(
     [string]$Serial = "",
     [string]$OutputDir = "",
     [switch]$StaticOnly,
     [switch]$AllowRobotCommands
 )
 
-. (Join-Path $PSScriptRoot "PageTest.Common.ps1")
+. (Join-Path $PSScriptRoot "..\PageTest.Common.ps1")
 $context = Start-PageTest -Page "home" -Serial $Serial -OutputDir $OutputDir -StaticOnly:$StaticOnly
 
 $layouts = @(

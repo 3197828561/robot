@@ -4,10 +4,10 @@
 
 | 页面 | 脚本 | 数据流/修改指南 |
 |---|---|---|
-| 主页 | `test-home.ps1` | `home.md` |
-| 地图 | `test-map.ps1` | `map.md` |
-| 手动控制 | `test-manual-control.ps1` | `manual-control.md` |
-| 状态详情 | `test-status.ps1` | `status.md` |
+| 主页 | `1home/test-home.ps1` | `1home/home.md` |
+| 地图 | `2map/test-map.ps1` | `2map/map.md` |
+| 手动控制 | `3manual/test-manual-control.ps1` | `3manual/manual-control.md` |
+| 状态详情 | `4status/test-status.ps1` | `4status/status.md` |
 
 公共 ADB、控件定位、静态绑定检查和报告逻辑在 `PageTest.Common.ps1`。它不是第五个页面脚本。
 
@@ -30,20 +30,20 @@
 ```powershell
 # 一次执行四个静态审计
 $scripts = @(
-  "test-home.ps1",
-  "test-map.ps1",
-  "test-manual-control.ps1",
-  "test-status.ps1"
+  "1home\test-home.ps1",
+  "2map\test-map.ps1",
+  "3manual\test-manual-control.ps1",
+  "4status\test-status.ps1"
 )
 foreach ($script in $scripts) {
   powershell -ExecutionPolicy Bypass -File "tools\page-tests\$script" -StaticOnly
 }
 
 # 指定多个设备中的一个
-powershell -ExecutionPolicy Bypass -File tools\page-tests\test-map.ps1 -Serial emulator-5554
+powershell -ExecutionPolicy Bypass -File tools\page-tests\2map\test-map.ps1 -Serial emulator-5554
 
 # 自定义证据目录
-powershell -ExecutionPolicy Bypass -File tools\page-tests\test-status.ps1 -OutputDir ".codex-artifacts\acceptance\status"
+powershell -ExecutionPolicy Bypass -File tools\page-tests\4status\test-status.ps1 -OutputDir ".codex-artifacts\acceptance\status"
 ```
 
 默认报告位置：

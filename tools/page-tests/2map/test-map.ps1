@@ -1,10 +1,10 @@
-param(
+﻿param(
     [string]$Serial = "",
     [string]$OutputDir = "",
     [switch]$StaticOnly
 )
 
-. (Join-Path $PSScriptRoot "PageTest.Common.ps1")
+. (Join-Path $PSScriptRoot "..\PageTest.Common.ps1")
 $context = Start-PageTest -Page "map" -Serial $Serial -OutputDir $OutputDir -StaticOnly:$StaticOnly
 
 $layouts = @(
