@@ -12,7 +12,9 @@ import com.robot.solar.network.mqtt.CloudCommMqttManager
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
+import com.robot.solar.network.mqtt.MapLoadStatus
 import com.robot.solar.network.mqtt.MapUiState
+import com.robot.solar.network.mqtt.MissionCommandPayloads
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.repository.DeviceRepository
@@ -42,8 +44,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val controlsEnabled = MediatorLiveData<ControlAvailability>().apply {
         fun refresh() {
             value = computeAvailability(
-                mqttConnected.value == true,
-                deviceOnline.value == true
+                connected = mqttConnected.value == true,
+                online = deviceOnline.value == true,
+                status = status.value,
+                mapState = mapState.value
             )
         }
         addSource(mqttConnected) { refresh() }
@@ -52,8 +56,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             refresh()
         }
         addSource(status) {
+            if (it?.operationalMode != "manual" || it.safetyState in REMOTE_BLOCKING_SAFETY_STATES) {
+                stopRemote(sendZero = true)
+            }
             refresh()
         }
+        addSource(mapState) { refresh() }
     }
 
     val deviceDisplayName: String?
@@ -68,6 +76,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var commandTimeoutJob: Job? = null
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
+    private var mqttShutdown = false
     private val cmdAckObserver = Observer<CmdAckMessage?> { handleCmdAck(it) }
     private val mqttConnectedObserver = Observer<Boolean> { connected ->
         if (connected != true) {
@@ -88,15 +97,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         mqtt.start(identity.deviceId, identity.productType)
     }
 
+    fun enterRemoteMode() {
+        if (mqttConnected.value == true && deviceOnline.value == true && status.value?.operationalMode != "manual") {
+            dispatchCmd("切换手动模式", "manual", applyDebounce = false)
+        }
+    }
+
+    fun leaveRemoteMode() {
+        stopRemote(sendZero = false)
+        if (mqttConnected.value == true && deviceOnline.value == true) {
+            dispatchCmd("切回自动模式", "auto", applyDebounce = false) {
+                mqtt.publishRemote(0.0, 0.0)
+            }
+        }
+    }
+
     fun startRemote(direction: ManualDirection) {
-        if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) return
+        if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) return
         if (remoteJob?.isActive == true && currentDirection == direction) return
         stopRemote(sendZero = remoteJob?.isActive == true)
         currentDirection = direction
         remoteJob = viewModelScope.launch(Dispatchers.IO) {
             delay(500)
             while (true) {
-                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true)) break
+                if (!isRemoteAllowed(mqttConnected.value == true, deviceOnline.value == true, status.value)) break
                 val active = currentDirection ?: break
                 mqtt.publishRemote(active.linearSpeedCms, active.angularSpeedRadps)
                 delay(50)
@@ -124,10 +148,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendCmd(label: String, action: String) {
-        if (!debounce()) return
-        if (!canSendCommand(action)) return
+        dispatchCmd(label, action, applyDebounce = true)
+    }
+
+    private fun dispatchCmd(
+        label: String,
+        action: String,
+        applyDebounce: Boolean,
+        beforePublish: (() -> Unit)? = null
+    ) {
+        if (applyDebounce && !debounce()) return
+        if (!canSendCommand(action)) {
+            _commandState.value = CommandUiState(null, action, CommandStatus.FAILED, "$label 当前不可用")
+            return
+        }
+        val params = commandParams(action) ?: run {
+            _commandState.value = CommandUiState(null, action, CommandStatus.FAILED, "$label 缺少地图或任务状态")
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
-            val result = mqtt.publishCmd(action)
+            beforePublish?.invoke()
+            val result = mqtt.publishCmd(action, params)
             if (result.published && result.cmdId != null) {
                 waitingCmdId = result.cmdId
                 _commandState.postValue(CommandUiState(result.cmdId, action, CommandStatus.SENDING, "$label 发送中"))
@@ -141,20 +182,39 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 LogUtils.device("已发送操作：$label")
             } else {
                 _commandState.postValue(CommandUiState(null, action, CommandStatus.FAILED, "$label 发送失败"))
-                LogUtils.device("命令失败：$label")
+                LogUtils.device("命令发送失败：$label")
             }
         }
     }
 
+    private fun commandParams(action: String): Map<String, Any?>? = when (action) {
+        "start" -> buildCoverageStartParams(mapState.value)
+        "stop", "pause", "resume", "replan" -> MissionCommandPayloads.targetMission(status.value?.missionId)
+        "manual", "auto", "estop", "clear_estop" -> emptyMap()
+        else -> null
+    }
+
+    private fun buildCoverageStartParams(state: MapUiState?): Map<String, Any?>? {
+        if (state?.status != MapLoadStatus.READY) return null
+        val metadata = state.map ?: return null
+        val map = state.pvMap ?: return null
+        val mapId = metadata.mapId ?: return null
+        val mapVersion = metadata.mapVersion ?: return null
+        if (map.mapId != mapId || map.version != mapVersion) return null
+        return MissionCommandPayloads.coverageStart(
+            mapId = mapId,
+            mapVersion = mapVersion,
+            cleanableBlockIds = map.blocks.filter { it.cleanable }.map { it.blockId }
+        )
+    }
+
     private fun handleCmdAck(ack: CmdAckMessage?) {
         ack ?: return
-        val pending = waitingCmdId
-        if (pending != null && ack.cmdId == pending) {
-            val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            finishPendingCommand(status, null, null)
+        val ackResult = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
+        if (waitingCmdId != null && ack.cmdId == waitingCmdId) {
+            finishPendingCommand(ackResult, null, ack.errorCode)
         } else {
-            val status = if (ack.ackStatus == "success") CommandStatus.SUCCESS else CommandStatus.FAILED
-            _commandState.postValue(CommandUiState(ack.cmdId, ack.cmd, status))
+            _commandState.postValue(CommandUiState(ack.cmdId, ack.cmd, ackResult, errorCode = ack.errorCode))
         }
     }
 
@@ -168,7 +228,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun canSendCommand(action: String): Boolean {
         if (mqttConnected.value != true || deviceOnline.value != true) return false
-        return action in AUTO_COMMANDS
+        val availability = controlsEnabled.value ?: computeAvailability(true, true, status.value, mapState.value)
+        return when (action) {
+            "start" -> availability.canStart
+            "stop" -> availability.canStop
+            "pause" -> availability.canPause
+            "resume" -> availability.canResume
+            "replan" -> availability.canReplan
+            "manual", "auto" -> true
+            "estop" -> availability.canEstop
+            "clear_estop" -> availability.canClearEstop
+            else -> false
+        }
     }
 
     private fun debounce(ms: Long = 400L): Boolean {
@@ -187,39 +258,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun shutdownMqtt() {
-        stopRemote(sendZero = true)
+        if (mqttShutdown) return
+        mqttShutdown = true
+        stopRemote(sendZero = false)
         commandTimeoutJob?.cancel()
+        if (mqttConnected.value == true) {
+            mqtt.publishRemote(0.0, 0.0)
+            if (status.value?.operationalMode == "manual") {
+                mqtt.publishCmd("auto", emptyMap())
+            }
+        }
         mqtt.shutdown()
     }
 
     fun retryMapDownload() = mqtt.retryMapDownload()
 
-    private fun isRemoteAllowed(connected: Boolean, online: Boolean): Boolean {
-        return ManualControlPolicy.isAllowed(connected, online)
+    private fun isRemoteAllowed(connected: Boolean, online: Boolean, status: StatusMessage?): Boolean {
+        return ManualControlPolicy.isAllowed(connected, online) &&
+            status?.operationalMode == "manual" &&
+            status.safetyState !in REMOTE_BLOCKING_SAFETY_STATES
     }
 
     private fun computeAvailability(
         connected: Boolean,
-        online: Boolean
+        online: Boolean,
+        status: StatusMessage?,
+        mapState: MapUiState?
     ): ControlAvailability {
         if (!connected || !online) return ControlAvailability()
+        val missionId = status?.missionId?.takeIf { it.isNotBlank() }
+        val runState = status?.runState
+        val activeMission = missionId != null && runState !in TERMINAL_RUN_STATES
+        val startReady = !activeMission && buildCoverageStartParams(mapState) != null
         return ControlAvailability(
-            canStart = true,
-            canStop = true,
+            canStart = startReady,
+            canStop = activeMission,
+            canPause = missionId != null && runState in setOf("starting", "running"),
+            canResume = missionId != null && runState == "paused",
+            canReplan = activeMission && status?.taskKind == "coverage",
             canEstop = true,
-            canClearEstop = true,
-            canRemote = isRemoteAllowed(connected, online)
+            canClearEstop = status?.safetyState in setOf("estop", "clearing_estop"),
+            canRemote = isRemoteAllowed(connected, online, status)
         )
     }
 
     companion object {
-        private val AUTO_COMMANDS = setOf("start", "stop", "estop", "clear_estop")
+        private val TERMINAL_RUN_STATES = setOf("idle", "succeeded", "failed", "canceled")
+        private val REMOTE_BLOCKING_SAFETY_STATES = setOf("estop", "clearing_estop", "fault")
     }
 }
 
 data class ControlAvailability(
     val canStart: Boolean = false,
     val canStop: Boolean = false,
+    val canPause: Boolean = false,
+    val canResume: Boolean = false,
+    val canReplan: Boolean = false,
     val canEstop: Boolean = false,
     val canClearEstop: Boolean = false,
     val canRemote: Boolean = false

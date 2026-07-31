@@ -15,8 +15,10 @@ import com.robot.solar.utils.LogUtils
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
+import java.time.format.DateTimeFormatterBuilder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -281,7 +283,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             topicMap(productType, deviceId),
             topicPose(productType, deviceId)
         )
-        mqttClient.subscribe(topics, IntArray(topics.size) { QOS })
+        mqttClient.subscribe(topics, IntArray(topics.size) { COMMAND_QOS })
         LogUtils.system("已订阅 device/$productType/$deviceId/* 上行主题")
     }
 
@@ -378,8 +380,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         }
     }
 
-    /** 低频系统命令：start / stop / estop / clear_estop。 */
-    fun publishCmd(action: String): CommandPublishResult {
+    /** 新版任务命令；params 必须由调用方按命令契约构造。 */
+    fun publishCmd(action: String, params: Map<String, Any?> = emptyMap()): CommandPublishResult {
         if (action !in SUPPORTED_CMDS) {
             LogUtils.system("拒绝发送未知命令：$action")
             return CommandPublishResult(false, null, action)
@@ -394,13 +396,13 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             .put("productType", productType)
             .put("timestamp", nowTimestamp())
             .put("cmd", action)
-            .put("params", JSONObject())
-        val ok = publish(topicCmd(productType, deviceId), json.toString())
+            .put("params", JSONObject(params))
+        val ok = publish(topicCmd(productType, deviceId), json.toString(), COMMAND_QOS, retained = false)
         return CommandPublishResult(ok, if (ok) cmdId else null, action)
     }
 
     /** 遥控速度：线速度单位 cm/s，前进为正；角速度单位 rad/s。 */
-    fun publishRemote(linearSpeedCms: Double, angularRadps: Double, durationMs: Int = 300): Boolean {
+    fun publishRemote(linearSpeedCms: Double, angularRadps: Double): Boolean {
         val deviceId = boundDeviceId ?: return false
         val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
         val safeLinear = linearSpeedCms.coerceIn(-20.0, 20.0)
@@ -412,8 +414,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             .put("timestamp", nowTimestamp())
             .put("linearSpeedCms", safeLinear)
             .put("angularSpeedRadps", safeAngular)
-            .put("durationMs", durationMs)
-        return publish(topicRemote(productType, deviceId), json.toString())
+        return publish(topicRemote(productType, deviceId), json.toString(), REMOTE_QOS, retained = false)
     }
 
     fun retryMapDownload() {
@@ -541,7 +542,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         require(actual.equals(expected, ignoreCase = true)) { "checksum 不匹配" }
     }
 
-    private fun publish(topic: String, json: String): Boolean {
+    private fun publish(
+        topic: String,
+        json: String,
+        qos: Int = COMMAND_QOS,
+        retained: Boolean = false
+    ): Boolean {
         val mqttClient = client
         if (mqttClient == null || !mqttClient.isConnected) {
             scope.launch { tryConnectIfNeeded("发送前补连") }
@@ -549,7 +555,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         }
         return try {
             val message = MqttMessage(json.toByteArray(Charsets.UTF_8))
-            message.qos = QOS
+            message.qos = qos
+            message.isRetained = retained
             mqttClient.publish(topic, message)
             true
         } catch (e: Exception) {
@@ -558,18 +565,28 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         }
     }
 
-    private fun newCmdId(): String = "cmd_${System.currentTimeMillis()}"
+    private fun newCmdId(): String {
+        val now = System.currentTimeMillis()
+        val unique = cmdSequence.updateAndGet { previous -> maxOf(previous + 1, now) }
+        return "cmd_${boundDeviceId}_$unique"
+    }
 
-    private fun nowTimestamp(): String = Instant.ofEpochMilli(System.currentTimeMillis()).toString()
+    private fun nowTimestamp(): String = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(System.currentTimeMillis()))
 
     companion object {
         private const val PROTOCOL_VERSION = "1.0"
-        private const val QOS = 1
+        private const val COMMAND_QOS = 1
+        private const val REMOTE_QOS = 0
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
         private const val MAX_MAP_BYTES = 20 * 1024 * 1024
         private const val MAP_CACHE_DIR = "maps"
         private const val MAP_PREFS_NAME = "map_cache"
-        private val SUPPORTED_CMDS = setOf("start", "stop", "estop", "clear_estop")
+        private val SUPPORTED_CMDS = setOf(
+            "start", "stop", "pause", "resume", "replan",
+            "manual", "auto", "estop", "clear_estop"
+        )
+        private val cmdSequence = AtomicLong(0L)
+        private val TIMESTAMP_FORMATTER = DateTimeFormatterBuilder().appendInstant(3).toFormatter()
 
         fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"
         fun topicStatus(productType: String, deviceId: String) = "device/$productType/$deviceId/status"

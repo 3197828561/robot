@@ -135,6 +135,9 @@ class MainActivity : AppCompatActivity() {
     private fun bindControls() {
         binding.btnStart.setOnClickListener { viewModel.sendCmd("开始运行", "start") }
         binding.btnStopRun.setOnClickListener { viewModel.sendCmd("停止运行", "stop") }
+        binding.btnPause.setOnClickListener { viewModel.sendCmd("暂停任务", "pause") }
+        binding.btnResume.setOnClickListener { viewModel.sendCmd("继续任务", "resume") }
+        binding.btnReplan.setOnClickListener { viewModel.sendCmd("重新规划", "replan") }
         binding.btnEmergency.setOnClickListener { viewModel.sendCmd("紧急停止", "estop") }
         binding.btnClearEstop.setOnClickListener { viewModel.sendCmd("解除急停", "clear_estop") }
         binding.btnRemoteEmergency.setOnClickListener {
@@ -214,12 +217,21 @@ class MainActivity : AppCompatActivity() {
                 "设备编号：${viewModel.deviceId ?: "--"}",
                 "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}",
                 "工作状态：${ProtocolDisplayText.workStatus(this, status.workStatus)}",
-                "控制模式：${ProtocolDisplayText.controlMode(this, status.controlMode)}",
+                "控制模式：${ProtocolDisplayText.controlMode(this, status.operationalMode ?: status.controlMode)}",
                 "电量：${status.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}",
                 "线速度：${status.linearSpeedCms?.let { String.format(Locale.getDefault(), "%.1f cm/s", it) } ?: "--"}",
                 "角速度：${status.angularSpeedRadps?.let { String.format(Locale.getDefault(), "%.2f rad/s", it) } ?: "--"}",
                 "设备状态：${ProtocolDisplayText.deviceStatus(this, status.deviceStatus)}",
                 "运动状态：${ProtocolDisplayText.movementStatus(this, status.movementStatus)}",
+                "任务综合状态：${missionDisplayState(status)}",
+                "任务编号：${status.missionId ?: "--"}",
+                "任务类型：${status.taskKind ?: "--"}",
+                "运行状态：${status.runState ?: "--"}",
+                "运行模式：${status.operationalMode ?: "--"}",
+                "安全状态：${status.safetyState ?: "--"}",
+                "任务阶段：${status.phase ?: "--"}",
+                "路径进度：${status.waypointIndex ?: "--"}/${status.waypointCount ?: "--"}",
+                "任务错误：${status.errorCode ?: 0}${status.errorMessage?.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""}",
                 "地图编号：${currentMapState.map?.mapId ?: "--"}",
                 "地图版本：${currentMapState.map?.mapVersion ?: "--"}",
                 "当前区域：${currentPose?.blockId ?: "--"}",
@@ -311,7 +323,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeWorkStatus)?.text =
             "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeControlMode)?.text =
-            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}"
+            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.operationalMode ?: it.controlMode) } ?: "--"}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeBattery)?.text =
             "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeLinearSpeed)?.text =
@@ -356,28 +368,33 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun commandDescription(cmd: String?, status: CommandStatus): String {
-        val actionText = when (cmd) {
-            "start" -> "机器人开始自动运行"
-            "stop" -> "机器人停止运行"
-            "estop" -> "紧急停止执行"
-            "clear_estop" -> "已解除急停状态"
-            else -> "等待命令执行"
-        }
-        return when (status) {
-            CommandStatus.SENDING -> "命令已发送，等待回执"
-            CommandStatus.SUCCESS -> actionText
-            CommandStatus.FAILED -> "设备未确认执行"
-            CommandStatus.TIMEOUT -> "回执等待超时"
-            CommandStatus.CONNECTION_LOST -> "连接中断，结果未知"
-            CommandStatus.IDLE -> "--"
-        }
+    private fun commandDescription(cmd: String?, status: CommandStatus): String = when (status) {
+        CommandStatus.SENDING -> "命令已发送，等待任务层回执"
+        CommandStatus.SUCCESS -> "命令已被任务层接受，最终结果以任务状态为准"
+        CommandStatus.FAILED -> "任务层拒绝命令，请查看错误码"
+        CommandStatus.TIMEOUT -> "任务层回执等待超时"
+        CommandStatus.CONNECTION_LOST -> "连接中断，接受结果未知"
+        CommandStatus.IDLE -> "--"
     }
 
+    private fun missionDisplayState(status: StatusMessage): String = when {
+        status.safetyState in setOf("estop", "clearing_estop") -> "急停处理中"
+        status.safetyState in setOf("low_battery", "fault") || status.runState == "failed" -> "故障"
+        status.runState == "starting" -> "启动中"
+        status.runState == "running" -> "运行中"
+        status.runState == "paused" -> "已暂停"
+        status.runState == "succeeded" -> "已完成"
+        status.runState == "canceled" -> "已取消"
+        status.runState == "idle" -> "空闲"
+        else -> "未知"
+    }
     private fun bindAvailability(availability: ControlAvailability) {
         currentAvailability = availability
         binding.btnStart.isEnabled = availability.canStart
         binding.btnStopRun.isEnabled = availability.canStop
+        binding.btnPause.isEnabled = availability.canPause
+        binding.btnResume.isEnabled = availability.canResume
+        binding.btnReplan.isEnabled = availability.canReplan
         binding.btnEmergency.isEnabled = availability.canEstop
         binding.btnRemoteEmergency.isEnabled = availability.canEstop
         binding.btnClearEstop.isEnabled = availability.canClearEstop
@@ -391,11 +408,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showPage(page: Page) {
-        if (currentPage == Page.REMOTE && page != Page.REMOTE) {
-            binding.directionPad.cancelInput()
-            viewModel.stopRemote(sendZero = true)
+        val previousPage = currentPage
+        if (previousPage == Page.REMOTE && page != Page.REMOTE) {
+            binding.directionPad.cancelInput(notifyRelease = false)
+            viewModel.leaveRemoteMode()
         }
         currentPage = page
+        if (previousPage != Page.REMOTE && page == Page.REMOTE) {
+            viewModel.enterRemoteMode()
+        }
         binding.sectionHome.visibility = if (page == Page.HOME) View.VISIBLE else View.GONE
         binding.sectionMap.visibility = if (page == Page.MAP) View.VISIBLE else View.GONE
         binding.sectionRemote.visibility = if (page == Page.REMOTE) View.VISIBLE else View.GONE
@@ -410,6 +431,8 @@ class MainActivity : AppCompatActivity() {
         return when {
             viewModel.mqttConnected.value != true -> "MQTT 未连接，手动控制不可用"
             viewModel.deviceOnline.value != true -> "设备离线，手动控制不可用"
+            viewModel.status.value?.operationalMode != "manual" -> "正在等待机器人确认手动模式"
+            viewModel.status.value?.safetyState in setOf("estop", "clearing_estop", "fault") -> "当前安全状态禁止遥控"
             else -> "当前条件不满足"
         }
     }

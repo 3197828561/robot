@@ -327,6 +327,32 @@
                                 app:cornerRadius="8dp" />
 
                             <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnPause"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
+                                android:text="暂停任务"
+                                app:cornerRadius="8dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnResume"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
+                                android:text="继续任务"
+                                app:cornerRadius="8dp" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnReplan"
+                                style="?attr/materialButtonOutlinedStyle"
+                                android:layout_width="match_parent"
+                                android:layout_height="48dp"
+                                android:layout_marginTop="8dp"
+                                android:text="重新规划"
+                                app:cornerRadius="8dp" />
+                            <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnEmergency"
                                 android:layout_width="match_parent"
                                 android:layout_height="52dp"

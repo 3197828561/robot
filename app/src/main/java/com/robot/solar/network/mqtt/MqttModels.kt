@@ -29,7 +29,20 @@ data class StatusMessage(
     val cleanedRows: Int?,
     val pressureKpa: Double?,
     val antiFallLeftM: Double?,
-    val antiFallRightM: Double?
+    val antiFallRightM: Double?,
+    val missionId: String?,
+    val taskKind: String?,
+    val runState: String?,
+    val operationalMode: String?,
+    val safetyState: String?,
+    val phase: String?,
+    val activeAction: String?,
+    val waypointIndex: Int?,
+    val waypointCount: Int?,
+    val errorCode: Int?,
+    val errorRetryable: Boolean?,
+    val errorSource: String?,
+    val errorMessage: String?
 )
 
 data class CmdAckMessage(
@@ -95,8 +108,7 @@ data class RemoteMessage(
     val productType: String,
     val timestamp: String,
     val linearSpeedCms: Double,
-    val angularSpeedRadps: Double,
-    val durationMs: Int
+    val angularSpeedRadps: Double
 )
 
 data class CommandPublishResult(

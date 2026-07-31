@@ -25,6 +25,16 @@ class MqttModelsParseTest {
               "angularSpeedRadps": 0.0,
               "deviceStatus": "normal",
               "movementStatus": "stopped",
+              "missionId": "mission-42",
+              "taskKind": "coverage",
+              "runState": "running",
+              "operationalMode": "auto",
+              "safetyState": "normal",
+              "phase": "executing",
+              "waypointIndex": 3,
+              "waypointCount": 9,
+              "errorCode": 0,
+              "errorRetryable": false,
               "temperatureC": 42.0,
               "cleanedRows": 156
             }
@@ -36,6 +46,12 @@ class MqttModelsParseTest {
         assertEquals(82.0, status.batteryPercent!!, 0.01)
         assertEquals(42.0, status.temperatureC!!, 0.01)
         assertEquals(156, status.cleanedRows)
+        assertEquals("mission-42", status.missionId)
+        assertEquals("running", status.runState)
+        assertEquals("auto", status.operationalMode)
+        assertEquals("normal", status.safetyState)
+        assertEquals(3, status.waypointIndex)
+        assertEquals(false, status.errorRetryable)
     }
 
     @Test

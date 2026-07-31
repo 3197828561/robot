@@ -51,6 +51,11 @@ object ProtocolDisplayText {
         when (value) {
             "start" -> R.string.command_start
             "stop" -> R.string.command_stop
+            "pause" -> R.string.command_pause
+            "resume" -> R.string.command_resume
+            "replan" -> R.string.command_replan
+            "manual" -> R.string.command_manual
+            "auto" -> R.string.command_auto
             "estop" -> R.string.command_estop
             "clear_estop" -> R.string.command_clear_estop
             null -> R.string.value_unavailable
