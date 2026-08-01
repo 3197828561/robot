@@ -35,6 +35,7 @@ import com.robot.solar.viewmodel.MainViewModel
 import com.robot.solar.viewmodel.ManualSpeedSettings
 import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
+import com.robot.solar.viewmodel.RemotePageLifecyclePolicy
 import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import java.text.SimpleDateFormat
@@ -88,8 +89,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        binding.directionPad.cancelInput()
-        viewModel.ordinaryRemoteStop()
+        if (RemotePageLifecyclePolicy.shouldStopOnPause(currentPage == Page.REMOTE)) {
+            binding.directionPad.cancelInput(notifyRelease = false)
+            viewModel.ordinaryRemoteStop()
+        }
         super.onPause()
     }
 

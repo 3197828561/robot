@@ -8,6 +8,7 @@ import com.robot.solar.viewmodel.ManualControlPolicy
 import com.robot.solar.viewmodel.MissionControlPolicy
 import com.robot.solar.viewmodel.MissionCommandErrorDisplay
 import com.robot.solar.viewmodel.MissionStatusDisplay
+import com.robot.solar.viewmodel.RemotePageLifecyclePolicy
 import com.robot.solar.network.mqtt.MissionState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -15,6 +16,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ManualControlPolicyTest {
+    @Test
+    fun activityPause_onlyStopsRemotePage() {
+        assertFalse(RemotePageLifecyclePolicy.shouldStopOnPause(isRemotePage = false))
+        assertTrue(RemotePageLifecyclePolicy.shouldStopOnPause(isRemotePage = true))
+    }
+
     @Test
     fun directions_applyConfiguredMagnitudeAndOwnTheSigns() {
         val settings = ManualSpeedSettings(

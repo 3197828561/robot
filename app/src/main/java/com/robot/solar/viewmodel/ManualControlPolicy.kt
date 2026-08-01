@@ -18,6 +18,11 @@ object ManualControlPolicy {
     }
 }
 
+object RemotePageLifecyclePolicy {
+    /** Activity失焦只应中止手动页遥控，普通页面跳转不发布零速。 */
+    fun shouldStopOnPause(isRemotePage: Boolean): Boolean = isRemotePage
+}
+
 object MissionControlPolicy {
     fun compute(
         connected: Boolean,
