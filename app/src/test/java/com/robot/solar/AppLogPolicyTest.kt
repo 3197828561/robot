@@ -38,7 +38,12 @@ class AppLogPolicyTest {
             status(),
             status(
                 missionId = "mission-2",
+                rootMissionId = "mission-root-2",
+                taskKind = "return_to_charge",
                 runState = "failed",
+                orchestrationState = "failed",
+                taskStackDepth = 2,
+                interruptionReason = "LOW_BATTERY",
                 operationalMode = "manual",
                 safetyState = "estop",
                 deviceStatus = "fault",
@@ -49,7 +54,11 @@ class AppLogPolicyTest {
             )
         )
 
-        assertTrue(changes.any { it.eventType == "mission_changed" && it.category == LogCategory.TASK })
+        assertTrue(changes.any { it.eventType == "root_mission_changed" && it.category == LogCategory.TASK })
+        assertTrue(changes.any { it.eventType == "current_task_changed" && it.category == LogCategory.TASK })
+        assertTrue(changes.any { it.eventType == "orchestration_state_changed" && it.severity == LogSeverity.ERROR })
+        assertTrue(changes.any { it.eventType == "task_stack_depth_changed" })
+        assertTrue(changes.any { it.eventType == "mission_interrupted" && it.severity == LogSeverity.WARNING })
         assertTrue(changes.any { it.eventType == "run_state_changed" && it.severity == LogSeverity.ERROR })
         assertTrue(changes.any { it.eventType == "operational_mode_changed" })
         assertTrue(changes.any { it.eventType == "safety_state_changed" && it.severity == LogSeverity.CRITICAL })
@@ -90,17 +99,27 @@ class AppLogPolicyTest {
         movementStatus: String? = "moving",
         batteryPercent: Int? = 50,
         errorCode: Int? = 0,
-        errorMessage: String? = null
+        errorMessage: String? = null,
+        rootMissionId: String? = "mission-root-1",
+        taskKind: String? = "coverage",
+        orchestrationState: String? = "running",
+        taskStackDepth: Int? = 1,
+        interruptionReason: String? = null
     ) = StatusLogSnapshot(
-        missionId,
-        runState,
-        operationalMode,
-        safetyState,
-        deviceStatus,
-        movementStatus,
-        batteryPercent,
-        errorCode,
-        errorMessage
+        missionId = missionId,
+        runState = runState,
+        operationalMode = operationalMode,
+        safetyState = safetyState,
+        deviceStatus = deviceStatus,
+        movementStatus = movementStatus,
+        batteryPercent = batteryPercent,
+        errorCode = errorCode,
+        errorMessage = errorMessage,
+        rootMissionId = rootMissionId,
+        taskKind = taskKind,
+        orchestrationState = orchestrationState,
+        taskStackDepth = taskStackDepth,
+        interruptionReason = interruptionReason
     )
 
     private fun log(

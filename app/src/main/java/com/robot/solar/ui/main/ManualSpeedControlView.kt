@@ -28,6 +28,7 @@ class ManualSpeedControlView @JvmOverloads constructor(
     private val angularSlider: Slider
     private val linearValue: TextView
     private val angularValue: TextView
+    private val adjustmentButtons: List<MaterialButton>
 
     init {
         orientation = VERTICAL
@@ -55,21 +56,26 @@ class ManualSpeedControlView @JvmOverloads constructor(
                 updateAndNotify(settings.copy(angularSpeedRadps = value.toDouble()))
             }
         }
-        findViewById<MaterialButton>(R.id.btnLinearMinus).setOnClickListener {
+        val linearMinus = findViewById<MaterialButton>(R.id.btnLinearMinus)
+        val linearPlus = findViewById<MaterialButton>(R.id.btnLinearPlus)
+        val angularMinus = findViewById<MaterialButton>(R.id.btnAngularMinus)
+        val angularPlus = findViewById<MaterialButton>(R.id.btnAngularPlus)
+        adjustmentButtons = listOf(linearMinus, linearPlus, angularMinus, angularPlus)
+        linearMinus.setOnClickListener {
             updateAndNotify(
                 settings.copy(
                     linearSpeedCms = settings.linearSpeedCms - ManualSpeedPolicy.LINEAR_STEP_CMS
                 )
             )
         }
-        findViewById<MaterialButton>(R.id.btnLinearPlus).setOnClickListener {
+        linearPlus.setOnClickListener {
             updateAndNotify(
                 settings.copy(
                     linearSpeedCms = settings.linearSpeedCms + ManualSpeedPolicy.LINEAR_STEP_CMS
                 )
             )
         }
-        findViewById<MaterialButton>(R.id.btnAngularMinus).setOnClickListener {
+        angularMinus.setOnClickListener {
             updateAndNotify(
                 settings.copy(
                     angularSpeedRadps =
@@ -77,7 +83,7 @@ class ManualSpeedControlView @JvmOverloads constructor(
                 )
             )
         }
-        findViewById<MaterialButton>(R.id.btnAngularPlus).setOnClickListener {
+        angularPlus.setOnClickListener {
             updateAndNotify(
                 settings.copy(
                     angularSpeedRadps =
@@ -91,6 +97,16 @@ class ManualSpeedControlView @JvmOverloads constructor(
     fun setSettings(value: ManualSpeedSettings) {
         val normalized = ManualSpeedPolicy.normalize(value)
         if (normalized != settings) render(normalized)
+    }
+
+    fun setControlsEnabled(enabled: Boolean) {
+        linearSlider.isEnabled = enabled
+        angularSlider.isEnabled = enabled
+        adjustmentButtons.forEach { it.isEnabled = enabled }
+        for (index in 0 until presetGroup.childCount) {
+            presetGroup.getChildAt(index).isEnabled = enabled
+        }
+        alpha = if (enabled) 1f else 0.55f
     }
 
     private fun updateAndNotify(value: ManualSpeedSettings) {

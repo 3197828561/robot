@@ -122,6 +122,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var lastCommandLabel: String? = null
     private var lastCommandParamsSummary: String? = null
     private var pendingExitToAuto = false
+    private var manualModeConfirmed = false
     private var remoteJob: Job? = null
     private var currentDirection: ManualDirection? = null
     @Volatile
@@ -144,20 +145,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     private val missionStateObserver = Observer<MissionState> { state ->
-        if (
-            !state.missionId.isNullOrBlank() &&
-            state.runState in setOf("starting", "running", "paused", "succeeded", "failed", "canceled")
-        ) {
+        if (hasStartedMissionState(state)) {
             _awaitingStartStatus.postValue(false)
         }
         if (state.safetyState == "normal") {
             _awaitingClearEstopStatus.postValue(false)
         }
+        if (state.operationalMode == "manual" && _remoteModeAccepted.value == true) {
+            manualModeConfirmed = true
+        }
+        if (state.operationalMode != "manual" || state.safetyState != "normal") {
+            stopRemote(sendZero = true, reason = "运行模式或安全状态变化")
+        }
+        if (state.safetyState != "normal") {
+            manualModeConfirmed = false
+            _remoteModeAccepted.postValue(false)
+        } else if (manualModeConfirmed && state.operationalMode != "manual") {
+            manualModeConfirmed = false
+            _remoteModeAccepted.postValue(false)
+        }
         if (!BuildConfig.DEBUG_CONTROL_BYPASS) {
-            if (state.operationalMode != "manual" || state.safetyState != "normal") {
-                stopRemote(sendZero = true, reason = "运行模式或安全状态变化")
-            }
-            if (state.operationalMode == "auto") {
+            if (state.operationalMode == "auto" && pendingExitToAuto) {
                 _remoteModeAccepted.postValue(false)
                 pendingExitToAuto = false
             } else if (
@@ -272,7 +280,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             rejectCommand("start", "请先加载有效地图")
             return
         }
-        if (map.mapId !in 0..UINT32_MAX || map.version !in 0..UINT32_MAX) {
+        if (map.mapId !in 1..UINT32_MAX || map.version !in 0..UINT32_MAX) {
             rejectCommand("start", "地图编号或版本超出协议范围")
             return
         }
@@ -378,16 +386,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun sendMissionCommand(label: String, action: String) {
-        val missionId = missionState.value?.missionId?.takeIf { it.isNotBlank() }
+        val missionId = missionState.value?.controlMissionId
         if (missionId == null && !BuildConfig.DEBUG_CONTROL_BYPASS) {
             rejectCommand(action, "当前没有可操作的任务")
             return
         }
+        val targetMissionId = missionId ?: DEBUG_MISSING_MISSION_ID
         sendPreparedCommand(
             label,
             action,
-            mapOf("targetMissionId" to missionId.orEmpty()),
-            "targetMissionId=${missionId.orEmpty()}"
+            mapOf("targetMissionId" to targetMissionId),
+            "targetMissionId=$targetMissionId"
         )
     }
 
@@ -397,6 +406,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun enterRemoteMode() {
         pendingExitToAuto = false
+        manualModeConfirmed = false
         _remoteModeAccepted.value = false
         if (
             !BuildConfig.DEBUG_CONTROL_BYPASS &&
@@ -410,6 +420,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun exitRemoteMode() {
         ordinaryRemoteStop()
+        manualModeConfirmed = false
         _remoteModeAccepted.value = false
         pendingExitToAuto = true
         if (
@@ -653,23 +664,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun applyAckSideEffects(ack: CmdAckMessage, status: CommandStatus) {
         if (ack.cmd == "manual") {
-            if (status == CommandStatus.SUCCESS || !BuildConfig.DEBUG_CONTROL_BYPASS) {
-                _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
-            }
+            manualModeConfirmed = false
+            _remoteModeAccepted.postValue(status == CommandStatus.SUCCESS)
         } else if (ack.cmd == "auto" && status == CommandStatus.SUCCESS) {
+            manualModeConfirmed = false
             _remoteModeAccepted.postValue(false)
         }
         if (ack.cmd == "start") {
             val mission = missionState.value
-            val stateAlreadyUpdated = !mission?.missionId.isNullOrBlank() &&
-                mission?.runState in setOf(
-                    "starting",
-                    "running",
-                    "paused",
-                    "succeeded",
-                    "failed",
-                    "canceled"
-                )
+            val stateAlreadyUpdated = mission?.let(::hasStartedMissionState) == true
             _awaitingStartStatus.postValue(
                 status == CommandStatus.SUCCESS && !stateAlreadyUpdated
             )
@@ -818,9 +821,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             online = online,
             operationalMode = mission?.operationalMode,
             safetyState = mission?.safetyState,
-            manualCommandAccepted = _remoteModeAccepted.value == true,
-            debugBypass = BuildConfig.DEBUG_CONTROL_BYPASS
+            manualCommandAccepted = _remoteModeAccepted.value == true
         )
+    }
+
+    private fun hasStartedMissionState(state: MissionState): Boolean {
+        val v4StateReceived = !state.rootMissionId.isNullOrBlank() &&
+            state.orchestrationState in setOf(
+                "running",
+                "paused_by_user",
+                "paused_by_safety",
+                "running_child",
+                "resuming",
+                "succeeded",
+                "failed",
+                "canceled"
+            )
+        val legacyStateReceived = state.rootMissionId.isNullOrBlank() &&
+            !state.missionId.isNullOrBlank() &&
+            state.runState in setOf("starting", "running", "paused", "succeeded", "failed", "canceled")
+        return v4StateReceived || legacyStateReceived
     }
 
     private fun computeAvailability(
@@ -843,6 +863,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val UINT32_MAX = 4_294_967_295L
         private const val MAX_ISSUED_COMMAND_HISTORY = 50
+        private const val DEBUG_MISSING_MISSION_ID = "debug-no-active-mission"
         private val SUPPORTED_COMMANDS = setOf(
             "start",
             "stop",

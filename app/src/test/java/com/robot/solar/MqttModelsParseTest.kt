@@ -8,6 +8,7 @@ import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.CoverageCommandParams
 import com.robot.solar.network.mqtt.CoverageStart
 import com.robot.solar.network.mqtt.RemoteControlContract
+import com.robot.solar.network.mqtt.MissionState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -88,8 +89,12 @@ class MqttModelsParseTest {
               "deviceId": "crawler_00000001",
               "productType": "crawler",
               "missionId": "mission-42",
-              "taskKind": "coverage",
+              "rootMissionId": "mission-41",
+              "taskKind": "return_to_charge",
               "runState": "running",
+              "orchestrationState": "running_child",
+              "taskStackDepth": 2,
+              "interruptionReason": "LOW_BATTERY",
               "operationalMode": "auto",
               "safetyState": "normal",
               "phase": "executing",
@@ -106,8 +111,12 @@ class MqttModelsParseTest {
         )
 
         assertEquals("mission-42", status.missionId)
-        assertEquals("coverage", status.taskKind)
+        assertEquals("mission-41", status.rootMissionId)
+        assertEquals("return_to_charge", status.taskKind)
         assertEquals("running", status.runState)
+        assertEquals("running_child", status.orchestrationState)
+        assertEquals(2, status.taskStackDepth)
+        assertEquals("LOW_BATTERY", status.interruptionReason)
         assertEquals("auto", status.operationalMode)
         assertEquals("normal", status.safetyState)
         assertEquals("executing", status.phase)
@@ -118,6 +127,22 @@ class MqttModelsParseTest {
         assertEquals(true, status.errorRetryable)
         assertEquals("mission_planner", status.errorSource)
         assertEquals("temporary planning failure", status.errorMessage)
+    }
+
+    @Test
+    fun controlMissionId_prefersV4RootAndFallsBackForLegacyRobot() {
+        assertEquals(
+            "mission-root",
+            MissionState(
+                missionId = "mission-child",
+                rootMissionId = "mission-root"
+            ).controlMissionId
+        )
+        assertEquals(
+            "mission-legacy",
+            MissionState(missionId = "mission-legacy").controlMissionId
+        )
+        assertEquals(null, MissionState().controlMissionId)
     }
 
     @Test
@@ -197,7 +222,11 @@ class MqttModelsParseTest {
     }
 
     @Test
-    fun allTargetMissionCommands_containOnlyLatestMissionId() {
+    fun allTargetMissionCommands_containOnlyV4ControlMissionId() {
+        val mission = MissionState(
+            missionId = "mission-child",
+            rootMissionId = "mission-root"
+        )
         listOf("stop", "pause", "resume", "replan").forEach { command ->
             val prepared = CommandPayloadFactory.create(
                 version = "1.0",
@@ -206,13 +235,13 @@ class MqttModelsParseTest {
                 productType = "crawler",
                 timestamp = "2026-07-26T08:30:00.123Z",
                 cmd = command,
-                params = mapOf("targetMissionId" to "mission-42"),
+                params = mapOf("targetMissionId" to mission.controlMissionId),
                 gson = gson
             )
             val params = JsonParser.parseString(prepared.payload).asJsonObject["params"].asJsonObject
 
             assertEquals(1, params.size())
-            assertEquals("mission-42", params["targetMissionId"].asString)
+            assertEquals("mission-root", params["targetMissionId"].asString)
         }
     }
 

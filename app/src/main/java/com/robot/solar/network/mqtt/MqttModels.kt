@@ -34,8 +34,12 @@ data class StatusMessage(
     val antiFallLeftM: Double?,
     val antiFallRightM: Double?,
     val missionId: String?,
+    val rootMissionId: String?,
     val taskKind: String?,
     val runState: String?,
+    val orchestrationState: String?,
+    val taskStackDepth: Int?,
+    val interruptionReason: String?,
     val operationalMode: String?,
     val safetyState: String?,
     val phase: String?,
@@ -170,8 +174,12 @@ data class CoverageTaskSelection(
 
 data class MissionState(
     val missionId: String? = null,
+    val rootMissionId: String? = null,
     val taskKind: String? = null,
     val runState: String? = null,
+    val orchestrationState: String? = null,
+    val taskStackDepth: Int? = null,
+    val interruptionReason: String? = null,
     val operationalMode: String? = null,
     val safetyState: String? = null,
     val phase: String? = null,
@@ -182,7 +190,19 @@ data class MissionState(
     val errorRetryable: Boolean? = null,
     val errorSource: String? = null,
     val errorMessage: String? = null
-)
+) {
+    /** V4 目标任务命令始终操作用户根任务；旧 Robot 无该字段时回退当前任务。 */
+    val controlMissionId: String?
+        get() = rootMissionId?.takeIf { it.isNotBlank() }
+            ?: missionId?.takeIf { it.isNotBlank() }
+
+    /** 当前协议只开放 coverage，因此出现根任务 ID 时根任务类型可确定为 coverage。 */
+    val rootTaskKind: String?
+        get() = when {
+            !rootMissionId.isNullOrBlank() -> "coverage"
+            else -> taskKind
+        }
+}
 
 data class RemoteMessage(
     val version: String,

@@ -81,15 +81,23 @@ class ManualControlPolicyTest {
     }
 
     @Test
-    fun debugBypass_onlyRequiresOnlineAndSuccessfulManualAckForRemoteControl() {
-        assertTrue(
+    fun debugBypass_stillRequiresManualStatusNormalSafetyAndSuccessfulAck() {
+        assertFalse(
             ManualControlPolicy.isAllowed(
                 connected = true,
                 online = true,
                 operationalMode = "auto",
                 safetyState = "estop",
-                manualCommandAccepted = true,
-                debugBypass = true
+                manualCommandAccepted = true
+            )
+        )
+        assertTrue(
+            ManualControlPolicy.isAllowed(
+                connected = true,
+                online = true,
+                operationalMode = "manual",
+                safetyState = "normal",
+                manualCommandAccepted = true
             )
         )
         assertFalse(
@@ -98,8 +106,7 @@ class ManualControlPolicyTest {
                 online = true,
                 operationalMode = "manual",
                 safetyState = "normal",
-                manualCommandAccepted = false,
-                debugBypass = true
+                manualCommandAccepted = false
             )
         )
     }
@@ -130,9 +137,26 @@ class ManualControlPolicyTest {
         assertTrue(availability.canEstop)
         assertTrue(availability.canClearEstop)
         assertTrue(availability.canManual)
-        assertTrue(availability.canAuto)
+        assertFalse(availability.canAuto)
         assertFalse(availability.canRemote)
         assertTrue(availability.canRetry)
+
+        val manualReady = MissionControlPolicy.compute(
+            connected = true,
+            online = true,
+            mission = MissionState(
+                operationalMode = "manual",
+                safetyState = "normal"
+            ),
+            manualCommandAccepted = true,
+            awaitingStartStatus = false,
+            awaitingClearEstopStatus = false,
+            commandInFlight = true,
+            retryAvailable = false,
+            debugBypass = true
+        )
+        assertTrue(manualReady.canRemote)
+        assertTrue(manualReady.canAuto)
     }
 
     @Test
@@ -160,8 +184,11 @@ class ManualControlPolicyTest {
             online = true,
             mission = MissionState(
                 missionId = "mission-42",
+                rootMissionId = "mission-42",
                 taskKind = "coverage",
                 runState = "running",
+                orchestrationState = "running",
+                taskStackDepth = 1,
                 operationalMode = "auto",
                 safetyState = "normal"
             ),
@@ -182,8 +209,11 @@ class ManualControlPolicyTest {
             online = true,
             mission = MissionState(
                 missionId = "mission-42",
+                rootMissionId = "mission-42",
                 taskKind = "coverage",
                 runState = "paused",
+                orchestrationState = "paused_by_user",
+                taskStackDepth = 1,
                 operationalMode = "auto",
                 safetyState = "normal"
             ),
@@ -214,6 +244,34 @@ class ManualControlPolicyTest {
         assertFalse(staleRunStateWithoutMissionId.canPause)
         assertFalse(staleRunStateWithoutMissionId.canResume)
         assertFalse(staleRunStateWithoutMissionId.canReplan)
+    }
+
+    @Test
+    fun v4ChildTask_keepsRootControlsButDisablesReplan() {
+        val child = MissionControlPolicy.compute(
+            connected = true,
+            online = true,
+            mission = MissionState(
+                missionId = "mission-child",
+                rootMissionId = "mission-root",
+                taskKind = "return_to_charge",
+                runState = "running",
+                orchestrationState = "running_child",
+                taskStackDepth = 2,
+                interruptionReason = "LOW_BATTERY",
+                operationalMode = "auto",
+                safetyState = "normal"
+            ),
+            manualCommandAccepted = false,
+            awaitingStartStatus = false,
+            awaitingClearEstopStatus = false,
+            commandInFlight = false,
+            retryAvailable = false
+        )
+
+        assertTrue(child.canStop)
+        assertTrue(child.canPause)
+        assertFalse(child.canReplan)
     }
 
     @Test
@@ -306,6 +364,28 @@ class ManualControlPolicyTest {
                 safetyState = "normal",
                 awaitingStart = true,
                 awaitingClearEstop = false
+            )
+        )
+        assertEquals(
+            "根任务已中断，正在执行内部子任务（低电量），栈深 2",
+            MissionStatusDisplay.text(
+                runState = "running",
+                safetyState = "normal",
+                awaitingStart = false,
+                awaitingClearEstop = false,
+                orchestrationState = "running_child",
+                taskStackDepth = 2,
+                interruptionReason = "LOW_BATTERY"
+            )
+        )
+        assertEquals(
+            "根任务已完成",
+            MissionStatusDisplay.text(
+                runState = "succeeded",
+                safetyState = "normal",
+                awaitingStart = false,
+                awaitingClearEstop = false,
+                orchestrationState = "succeeded"
             )
         )
         assertEquals(

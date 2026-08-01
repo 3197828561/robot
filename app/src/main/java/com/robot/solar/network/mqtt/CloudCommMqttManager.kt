@@ -390,8 +390,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     _missionState.postValue(
                         MissionState(
                             missionId = msg.missionId,
+                            rootMissionId = msg.rootMissionId,
                             taskKind = msg.taskKind,
                             runState = msg.runState,
+                            orchestrationState = msg.orchestrationState,
+                            taskStackDepth = msg.taskStackDepth,
+                            interruptionReason = msg.interruptionReason,
                             operationalMode = msg.operationalMode,
                             safetyState = msg.safetyState,
                             phase = msg.phase,
@@ -411,8 +415,8 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     val ack = gson.fromJson(payload, CmdAckMessage::class.java)
                     _lastCmdAck.postValue(ack)
                     val text = when (ack.ackStatus) {
-                        "success" -> "设备已确认执行结果"
-                        "failed" -> "设备未能执行操作"
+                        "success" -> "机器人已受理命令"
+                        "failed" -> "机器人拒绝了命令"
                         else -> "收到设备操作反馈"
                     }
                     _lastCmdFeedback.postValue(text)
@@ -524,11 +528,21 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             movementStatus = msg.movementStatus,
             batteryPercent = msg.batteryPercent?.toInt(),
             errorCode = msg.missionErrorCode,
-            errorMessage = msg.errorMessage
+            errorMessage = msg.errorMessage,
+            rootMissionId = msg.rootMissionId,
+            taskKind = msg.taskKind,
+            orchestrationState = msg.orchestrationState,
+            taskStackDepth = msg.taskStackDepth,
+            interruptionReason = msg.interruptionReason
         )
         val details = JSONObject()
             .put("missionId", msg.missionId)
+            .put("rootMissionId", msg.rootMissionId)
+            .put("taskKind", msg.taskKind)
             .put("runState", msg.runState)
+            .put("orchestrationState", msg.orchestrationState)
+            .put("taskStackDepth", msg.taskStackDepth)
+            .put("interruptionReason", msg.interruptionReason)
             .put("operationalMode", msg.operationalMode)
             .put("safetyState", msg.safetyState)
             .put("phase", msg.phase)
@@ -545,7 +559,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     severity = change.severity,
                     direction = LogDirection.UPSTREAM,
                     topic = topic,
-                    missionId = msg.missionId,
+                    missionId = msg.rootMissionId?.takeIf { it.isNotBlank() } ?: msg.missionId,
                     action = msg.activeAction,
                     result = change.result,
                     summary = change.summary,

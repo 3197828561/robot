@@ -403,17 +403,24 @@ class MainActivity : AppCompatActivity() {
         "运动状态 movementStatus：${status?.let {
             ProtocolDisplayText.movementStatus(this, it.movementStatus)
         } ?: "--"}",
-        "任务编号 missionId：${status?.missionId ?: "--"}",
-        "任务类型 taskKind：${status?.taskKind ?: "--"}",
-        "任务状态（由 runState/safetyState 映射）：${status?.let {
+        "根任务编号 rootMissionId：${status?.rootMissionId ?: "--"}",
+        "当前任务编号 missionId：${status?.missionId ?: "--"}",
+        "当前任务类型 taskKind：${ProtocolDisplayText.taskKind(status?.taskKind)}",
+        "整体任务状态 orchestrationState：${ProtocolDisplayText.orchestrationState(status?.orchestrationState)}",
+        "任务栈深度 taskStackDepth：${status?.taskStackDepth ?: "--"}",
+        "中断原因 interruptionReason：${ProtocolDisplayText.interruptionReason(status?.interruptionReason)}",
+        "任务状态（安全状态优先，其次根任务状态）：${status?.let {
             MissionStatusDisplay.text(
-                it.runState,
-                it.safetyState,
-                viewModel.awaitingStartStatus.value == true,
-                viewModel.awaitingClearEstopStatus.value == true
+                runState = it.runState,
+                safetyState = it.safetyState,
+                awaitingStart = viewModel.awaitingStartStatus.value == true,
+                awaitingClearEstop = viewModel.awaitingClearEstopStatus.value == true,
+                orchestrationState = it.orchestrationState,
+                taskStackDepth = it.taskStackDepth,
+                interruptionReason = it.interruptionReason
             )
         } ?: "--"}",
-        "runState：${status?.runState ?: "--"}",
+        "当前任务状态 runState：${status?.runState ?: "--"}",
         "运行模式 operationalMode：${status?.operationalMode ?: "--"}",
         "安全状态 safetyState：${status?.safetyState ?: "--"}",
         "任务阶段 phase：${status?.phase ?: "--"}",
@@ -528,7 +535,7 @@ class MainActivity : AppCompatActivity() {
             ?: ack.message?.takeIf { it.isNotBlank() }
             ?: if (success) "机器人已成功受理" else "机器人拒绝了该命令"
         MaterialAlertDialogBuilder(this)
-            .setTitle(if (success) "$commandName：成功" else "$commandName：失败")
+            .setTitle(if (success) "$commandName：已受理" else "$commandName：失败")
             .setMessage(
                 buildString {
                     append(detail)
@@ -547,6 +554,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindHomeStatusCard(status: StatusMessage?) {
+        val missionStatus = status?.let {
+            MissionStatusDisplay.text(
+                runState = it.runState,
+                safetyState = it.safetyState,
+                awaitingStart = viewModel.awaitingStartStatus.value == true,
+                awaitingClearEstop = viewModel.awaitingClearEstopStatus.value == true,
+                orchestrationState = it.orchestrationState,
+                taskStackDepth = it.taskStackDepth,
+                interruptionReason = it.interruptionReason
+            )
+        }
+        val homeWorkStatus = missionStatus?.takeUnless { it == "--" }
+            ?: status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) }
+            ?: "--"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeOnline)?.text =
             "在线状态：${when (viewModel.deviceOnline.value) {
                 true -> "在线"
@@ -554,7 +575,7 @@ class MainActivity : AppCompatActivity() {
                 null -> "--"
             }}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeWorkStatus)?.text =
-            "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}"
+            "工作状态：$homeWorkStatus"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeControlMode)?.text =
             "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeBattery)?.text =
@@ -614,6 +635,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnRetryCommand.isEnabled = availability.canRetry
         binding.directionPad.controlsEnabled = availability.canRemote
         binding.btnRemoteStop.isEnabled = availability.canRemote
+        binding.manualSpeedControl.setControlsEnabled(availability.canRemote)
         binding.tvRemoteHint.text = if (availability.canRemote) {
             "长按方向按钮 0.5 秒后开始，松开立即停止"
         } else {

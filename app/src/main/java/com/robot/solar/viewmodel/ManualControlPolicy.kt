@@ -8,12 +8,8 @@ object ManualControlPolicy {
         online: Boolean,
         operationalMode: String?,
         safetyState: String?,
-        manualCommandAccepted: Boolean,
-        debugBypass: Boolean = false
+        manualCommandAccepted: Boolean
     ): Boolean {
-        if (debugBypass) {
-            return connected && online && manualCommandAccepted
-        }
         return connected &&
             online &&
             operationalMode == "manual" &&
@@ -36,6 +32,13 @@ object MissionControlPolicy {
     ): ControlAvailability {
         if (!connected || !online) return ControlAvailability()
         if (debugBypass) {
+            val manualReady = ManualControlPolicy.isAllowed(
+                connected,
+                online,
+                mission.operationalMode,
+                mission.safetyState,
+                manualCommandAccepted
+            )
             return ControlAvailability(
                 canStart = true,
                 canStop = true,
@@ -45,15 +48,23 @@ object MissionControlPolicy {
                 canEstop = true,
                 canClearEstop = true,
                 canManual = true,
-                canAuto = true,
-                canRemote = manualCommandAccepted,
+                canAuto = manualReady,
+                canRemote = manualReady,
                 canRetry = retryAvailable
             )
         }
         val safety = mission.safetyState
         val runState = mission.runState
-        val activeMission = !mission.missionId.isNullOrBlank() &&
-            runState in setOf("starting", "running", "paused")
+        val activeMission = !mission.controlMissionId.isNullOrBlank() && when (mission.orchestrationState) {
+            "running", "paused_by_user", "paused_by_safety", "running_child", "resuming" -> true
+            null, "unknown" -> runState in setOf("starting", "running", "paused")
+            else -> false
+        }
+        val rootCoverage = mission.rootTaskKind == "coverage"
+        val rootOnly = when {
+            !mission.rootMissionId.isNullOrBlank() -> mission.taskStackDepth == 1
+            else -> mission.taskStackDepth == null
+        }
         val safeForMission = safety == "normal"
         return ControlAvailability(
             canStart = safeForMission &&
@@ -63,7 +74,7 @@ object MissionControlPolicy {
             canStop = activeMission,
             canPause = activeMission && runState in setOf("starting", "running"),
             canResume = activeMission && runState == "paused",
-            canReplan = activeMission && mission.taskKind == "coverage",
+            canReplan = activeMission && rootCoverage && rootOnly,
             canEstop = safety !in setOf("estop", "clearing_estop"),
             canClearEstop = safety == "estop" && !awaitingClearEstopStatus,
             canManual = safeForMission &&
@@ -87,7 +98,10 @@ object MissionStatusDisplay {
         runState: String?,
         safetyState: String?,
         awaitingStart: Boolean,
-        awaitingClearEstop: Boolean
+        awaitingClearEstop: Boolean,
+        orchestrationState: String? = null,
+        taskStackDepth: Int? = null,
+        interruptionReason: String? = null
     ): String {
         return when (safetyState) {
             "estop" -> if (awaitingClearEstop) {
@@ -99,19 +113,41 @@ object MissionStatusDisplay {
             "low_battery" -> "低电量"
             "fault" -> "故障"
             else -> {
-                if (awaitingStart && runState in setOf(null, "idle", "unknown")) {
+                if (
+                    awaitingStart &&
+                    orchestrationState in setOf(null, "idle", "unknown") &&
+                    runState in setOf(null, "idle", "unknown")
+                ) {
                     "启动请求已受理，等待任务状态"
                 } else {
-                    when (runState) {
+                    when (orchestrationState) {
                         "idle" -> "空闲"
-                        "starting" -> "启动中"
-                        "running" -> "运行中"
-                        "paused" -> "已暂停"
-                        "succeeded" -> "已完成"
-                        "failed" -> "失败"
-                        "canceled" -> "已取消"
-                        null -> if (awaitingStart) "启动请求已受理，等待任务状态" else "--"
-                        else -> "未知"
+                        "running" -> "根任务运行中"
+                        "paused_by_user" -> "根任务已由用户暂停"
+                        "paused_by_safety" -> "根任务因安全原因暂停"
+                        "running_child" -> buildString {
+                            append("根任务已中断，正在执行内部子任务")
+                            interruptionReason?.takeIf { it.isNotBlank() }?.let {
+                                append("（${if (it == "LOW_BATTERY") "低电量" else it}）")
+                            }
+                            if (taskStackDepth != null) append("，栈深 $taskStackDepth")
+                        }
+                        "resuming" -> "内部子任务结束，正在恢复根任务"
+                        "succeeded" -> "根任务已完成"
+                        "failed" -> "根任务失败"
+                        "canceled" -> "根任务已取消"
+                        "unknown" -> "根任务状态未知"
+                        else -> when (runState) {
+                            "idle" -> "空闲"
+                            "starting" -> "启动中"
+                            "running" -> "运行中"
+                            "paused" -> "已暂停"
+                            "succeeded" -> "已完成"
+                            "failed" -> "失败"
+                            "canceled" -> "已取消"
+                            null -> if (awaitingStart) "启动请求已受理，等待任务状态" else "--"
+                            else -> "未知"
+                        }
                     }
                 }
             }

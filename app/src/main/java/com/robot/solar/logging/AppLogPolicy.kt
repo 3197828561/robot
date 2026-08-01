@@ -14,7 +14,12 @@ data class StatusLogSnapshot(
     val movementStatus: String?,
     val batteryPercent: Int?,
     val errorCode: Int?,
-    val errorMessage: String?
+    val errorMessage: String?,
+    val rootMissionId: String? = null,
+    val taskKind: String? = null,
+    val orchestrationState: String? = null,
+    val taskStackDepth: Int? = null,
+    val interruptionReason: String? = null
 )
 
 data class StatusLogChange(
@@ -49,13 +54,73 @@ object AppLogPolicy {
             )
         }
         return buildList {
+            if (
+                previous.rootMissionId != current.rootMissionId &&
+                !current.rootMissionId.isNullOrBlank()
+            ) {
+                add(
+                    StatusLogChange(
+                        LogCategory.TASK,
+                        "root_mission_changed",
+                        LogSeverity.INFO,
+                        "根任务变更为 ${current.rootMissionId}"
+                    )
+                )
+            }
             if (previous.missionId != current.missionId && !current.missionId.isNullOrBlank()) {
                 add(
                     StatusLogChange(
                         LogCategory.TASK,
-                        "mission_changed",
+                        "current_task_changed",
                         LogSeverity.INFO,
-                        "当前任务变更为 ${current.missionId}"
+                        "当前执行任务变更为 ${current.missionId}${current.taskKind?.let { "（$it）" }.orEmpty()}"
+                    )
+                )
+            }
+            if (
+                previous.orchestrationState != current.orchestrationState &&
+                !current.orchestrationState.isNullOrBlank()
+            ) {
+                val severity = if (current.orchestrationState == "failed") {
+                    LogSeverity.ERROR
+                } else {
+                    LogSeverity.INFO
+                }
+                add(
+                    StatusLogChange(
+                        LogCategory.TASK,
+                        "orchestration_state_changed",
+                        severity,
+                        "根任务状态：${previous.orchestrationState ?: "--"} → ${current.orchestrationState}",
+                        current.orchestrationState
+                    )
+                )
+            }
+            if (
+                previous.taskStackDepth != current.taskStackDepth &&
+                current.taskStackDepth != null
+            ) {
+                add(
+                    StatusLogChange(
+                        LogCategory.TASK,
+                        "task_stack_depth_changed",
+                        LogSeverity.INFO,
+                        "任务栈深度：${previous.taskStackDepth ?: "--"} → ${current.taskStackDepth}",
+                        current.taskStackDepth.toString()
+                    )
+                )
+            }
+            if (
+                previous.interruptionReason != current.interruptionReason &&
+                !current.interruptionReason.isNullOrBlank()
+            ) {
+                add(
+                    StatusLogChange(
+                        LogCategory.TASK,
+                        "mission_interrupted",
+                        LogSeverity.WARNING,
+                        "根任务被打断：${current.interruptionReason}",
+                        current.interruptionReason
                     )
                 )
             }
@@ -66,7 +131,7 @@ object AppLogPolicy {
                         LogCategory.TASK,
                         "run_state_changed",
                         severity,
-                        "任务状态：${previous.runState ?: "--"} → ${current.runState}",
+                        "当前任务状态：${previous.runState ?: "--"} → ${current.runState}",
                         current.runState
                     )
                 )
