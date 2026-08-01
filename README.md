@@ -16,9 +16,8 @@ app/                                  Android App
 docs/                                 需求、接口、部署和联调文档
 docs/requirements/                    第一版/第二版 App 需求文档
 docs/requirements/map_planner/        机器人地图 JSON 生成逻辑和示例地图
-tools/robot-sim/mqtt-robot-sim.ps1    本地 MQTT 机器人模拟器
-tools/robot-sim/README.md             模拟器使用说明和页面测试清单
-tools/apk-download/                   APK 局域网下载工具
+tools/robot-sim/                      三个单一职责的 MQTT 测试脚本
+tools/robot-sim/README.md             在线、监听和手动模式测试说明
 local.properties.example              本地配置示例
 ```
 
@@ -73,7 +72,7 @@ mqtt.robot.password=your_robot_mqtt_password
 用命令行构建调试 APK：
 
 ```powershell
-.\gradlew.bat assembleDebug
+.\tools\run-gradle.ps1 assembleDebug
 ```
 
 APK 输出位置：
@@ -88,26 +87,30 @@ app/build/outputs/apk/debug/app-debug.apk
 adb install -r app\build\outputs\apk\debug\app-debug.apk
 ```
 
-## Run The Robot Simulator
+## Run The Robot Test Scripts
 
 安装 Mosquitto 客户端后，在仓库根目录运行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-online.ps1
 ```
 
 如果 Mosquitto 没有加入 PATH：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -MosquittoDir "C:\Program Files\Mosquitto"
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-online.ps1 -MosquittoDir "C:\Program Files\Mosquitto"
 ```
 
-默认 `auto` 模式会持续上报 `heartbeat`、`status`、`pose`，并自动监听 App 下发的 `cmd` 和 `remote`。传入 `-MapJsonUrl` 时还会发布远程地图 `map` 通知。它适合测试控制台首页、地图页、手动控制页、状态页和日志页。
-
-快速喂一轮 MQTT 页面测试数据：
+主页在线测试只发布 `heartbeat`。查看App命令使用只监听脚本：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -Mode smoke
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-command-listener.ps1
+```
+
+测试手动控制页面使用会回复 `manual/auto/estop/clear_estop` 的脚本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 ```
 
 更多说明见 [tools/robot-sim/README.md](tools/robot-sim/README.md)。
@@ -117,19 +120,19 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -Mod
 运行单元测试：
 
 ```powershell
-.\gradlew.bat testDebugUnitTest
+.\tools\run-gradle.ps1 testDebugUnitTest
 ```
 
 构建调试包：
 
 ```powershell
-.\gradlew.bat assembleDebug
+.\tools\run-gradle.ps1 assembleDebug
 ```
 
 常用完整验证：
 
 ```powershell
-.\gradlew.bat testDebugUnitTest assembleDebug
+.\tools\run-gradle.ps1 testDebugUnitTest assembleDebug
 ```
 
 ## Main Documents
@@ -143,7 +146,6 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -Mod
 | [docs/server-http-only-deploy.md](docs/server-http-only-deploy.md) | 已有 MQTT 服务时部署 HTTP API |
 | [docs/deploy-aliyun.md](docs/deploy-aliyun.md) | 从零部署云端服务 |
 | [tools/robot-sim/README.md](tools/robot-sim/README.md) | 本地 MQTT 机器人模拟器 |
-| [tools/apk-download/serve-apk.md](tools/apk-download/serve-apk.md) | APK 局域网下载 |
 
 ## App Test Flow
 
@@ -151,8 +153,8 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\mqtt-robot-sim.ps1 -Mod
 2. 确认 `local.properties` 中的 `api.base.url`、`mqtt.host`、账号、设备 ID 正确。
 3. 启动 App，登录后进入设备列表。
 4. 选择与模拟器一致的设备，例如 `crawler/crawler_00000001`。
-5. 启动 `tools/robot-sim/mqtt-robot-sim.ps1` 默认 `auto` 模式。
-6. 在 App 控制台检查首页、地图、手动控制、状态、日志。
+5. 按测试目标启动 `robot-online.ps1`、`robot-command-listener.ps1` 或 `robot-manual-mode.ps1`。
+6. 在App中检查首页在线状态、实际下发命令或手动控制闭环。
 7. 作业记录、固件升级、WiFi 配置页面通过 HTTP 后端数据验证。
 
 ## Notes
