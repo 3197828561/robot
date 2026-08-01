@@ -1,6 +1,6 @@
 # Robot MQTT 测试脚本
 
-本目录只保留三个单一职责的测试入口。它们默认读取项目根目录中已被Git忽略的
+本目录保留四个单一职责的测试入口。它们默认读取项目根目录中已被Git忽略的
 `local.properties`，并通过 `mqtt.client.dir` 自动定位Mosquitto客户端。
 
 ## 1. 主页：机器人在线
@@ -47,6 +47,39 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 
 脚本同时支持手动页面的急停和解除急停。其他任务命令会返回
 `SIM_MANUAL_MODE_ONLY`，避免误以为完整任务模拟已经启动。
+
+## 4. 发布地图通知
+
+默认验证并发布当前测试地图：
+
+```text
+http://47.103.157.213/maps/crawler/crawler_00000001/map_2_v1.json
+```
+
+目标设备和Topic：
+
+```text
+crawler/crawler_00000001
+device/crawler/crawler_00000001/map
+```
+
+运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
+```
+
+脚本会先下载地图JSON，读取 `map_id/version`，计算文件大小和SHA-256，再发布一次
+`map` 通知。App收到后会从 `mapJsonUrl` 下载、校验并缓存地图。
+
+指定其他地图或设备：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1 `
+  -MapUrl "http://server/maps/example.json" `
+  -ProductTypeOverride crawler `
+  -DeviceIdOverride crawler_00000001
+```
 
 ## 配置
 

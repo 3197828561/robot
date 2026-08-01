@@ -16,8 +16,8 @@ app/                                  Android App
 docs/                                 需求、接口、部署和联调文档
 docs/requirements/                    第一版/第二版 App 需求文档
 docs/requirements/map_planner/        机器人地图 JSON 生成逻辑和示例地图
-tools/robot-sim/                      三个单一职责的 MQTT 测试脚本
-tools/robot-sim/README.md             在线、监听和手动模式测试说明
+tools/robot-sim/                      四个单一职责的 MQTT 测试脚本
+tools/robot-sim/README.md             在线、监听、手动模式和地图通知说明
 local.properties.example              本地配置示例
 ```
 
@@ -113,6 +113,12 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-command-listener.
 powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 ```
 
+让App下载当前测试地图：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
+```
+
 更多说明见 [tools/robot-sim/README.md](tools/robot-sim/README.md)。
 
 ## Validate
@@ -153,7 +159,7 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 2. 确认 `local.properties` 中的 `api.base.url`、`mqtt.host`、账号、设备 ID 正确。
 3. 启动 App，登录后进入设备列表。
 4. 选择与模拟器一致的设备，例如 `crawler/crawler_00000001`。
-5. 按测试目标启动 `robot-online.ps1`、`robot-command-listener.ps1` 或 `robot-manual-mode.ps1`。
+5. 按测试目标启动在线、监听、手动模式或地图通知脚本。
 6. 在App中检查首页在线状态、实际下发命令或手动控制闭环。
 7. 作业记录、固件升级、WiFi 配置页面通过 HTTP 后端数据验证。
 
