@@ -29,6 +29,7 @@
 
 - `2026-08-01-map-upload-backend-implementation.md`
 - `2026-08-01-app-mission-command-migration.md`
+- `2026-08-01-login-bcrypt-compatibility-fix.md`
 
 ### 3. `docs/` 根目录：长期维护资料
 
