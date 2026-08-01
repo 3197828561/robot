@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_speed_panel"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="速度设置"
+        android:textColor="@color/control_title"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/speedPresetGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:selectionRequired="false"
+        app:singleSelection="true">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSpeedSlow"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:ellipsize="none"
+            android:gravity="center"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:lines="1"
+            android:maxLines="1"
+            android:minWidth="0dp"
+            android:paddingHorizontal="0dp"
+            android:singleLine="true"
+            android:text="慢速10/.1"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSpeedStandard"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:ellipsize="none"
+            android:gravity="center"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:lines="1"
+            android:maxLines="1"
+            android:minWidth="0dp"
+            android:paddingHorizontal="0dp"
+            android:singleLine="true"
+            android:text="标准30/.3"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSpeedHigh"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="0dp"
+            android:layout_height="56dp"
+            android:layout_weight="1"
+            android:ellipsize="none"
+            android:gravity="center"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:lines="1"
+            android:maxLines="1"
+            android:minWidth="0dp"
+            android:paddingHorizontal="0dp"
+            android:singleLine="true"
+            android:text="高速50/.5"
+            android:textAllCaps="false"
+            android:textSize="12sp" />
+    </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="线速度（cm/s）"
+        android:textColor="@color/control_text"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLinearMinus"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="−"
+            android:textSize="20sp" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/sliderLinearSpeed"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="6dp"
+            android:layout_weight="1"
+            android:stepSize="1"
+            android:value="30"
+            android:valueFrom="0"
+            android:valueTo="50"
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLinearPlus"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="+"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/tvLinearSpeedValue"
+            android:layout_width="64dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="30&#10;cm/s"
+            android:textColor="@color/control_title"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="角速度（rad/s）"
+        android:textColor="@color/control_text"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAngularMinus"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="−"
+            android:textSize="20sp" />
+
+        <com.google.android.material.slider.Slider
+            android:id="@+id/sliderAngularSpeed"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="6dp"
+            android:layout_weight="1"
+            android:stepSize="0.1"
+            android:value="0.3"
+            android:valueFrom="0"
+            android:valueTo="0.5"
+            app:labelBehavior="gone"
+            app:tickVisible="false" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnAngularPlus"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:insetTop="0dp"
+            android:insetBottom="0dp"
+            android:minWidth="0dp"
+            android:padding="0dp"
+            android:text="+"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/tvAngularSpeedValue"
+            android:layout_width="64dp"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="0.3&#10;rad/s"
+            android:textColor="@color/control_title"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="这里只设置速度大小，前进/后退/左转/右转按钮自动决定正负方向。"
+        android:textColor="@color/control_text_muted"
+        android:textSize="12sp" />
+</LinearLayout>

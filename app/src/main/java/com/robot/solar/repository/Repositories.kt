@@ -4,13 +4,15 @@ import android.content.Context
 import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.SessionManager
 import com.robot.solar.database.AppDatabase
-import com.robot.solar.entity.LogType
-import com.robot.solar.entity.SolarLogEntity
+import com.robot.solar.entity.StructuredLogDraft
+import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.network.http.ApiClient
 import com.robot.solar.network.http.dto.LoginRequest
 import com.robot.solar.network.mqtt.DeviceTopicIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 
 class AuthRepository private constructor(
     private val session: SessionManager
@@ -48,19 +50,46 @@ class AuthRepository private constructor(
 }
 
 class LogRepository private constructor(
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    private val session: SessionManager
 ) {
     fun observeLogsDesc() = database.logDao().observeAllDesc()
+    fun observeRecentCommands(limit: Int = 4) = database.logDao().observeRecentCommands(limit)
+    suspend fun clearAll() = database.logDao().deleteAll()
 
-    suspend fun insert(type: LogType, content: String) {
-        database.logDao().insert(
-            SolarLogEntity(
-                timestampMillis = System.currentTimeMillis(),
-                type = type,
-                content = content
+    suspend fun upsert(draft: StructuredLogDraft) {
+        database.logDao().upsert(
+            StructuredLogEntity(
+                eventId = draft.eventId ?: UUID.randomUUID().toString(),
+                timestampMillis = draft.timestampMillis,
+                deviceId = draft.deviceId ?: session.deviceId,
+                productType = draft.productType ?: session.productType,
+                source = draft.source,
+                category = draft.category,
+                eventType = draft.eventType,
+                severity = draft.severity,
+                direction = draft.direction,
+                topic = draft.topic,
+                cmdId = draft.cmdId,
+                missionId = draft.missionId,
+                action = draft.action,
+                result = draft.result,
+                summary = draft.summary,
+                detailJson = draft.detailJson,
+                dedupeKey = draft.dedupeKey,
+                repeatCount = 1
             )
         )
+        if (writesSinceCleanup.incrementAndGet() >= CLEANUP_INTERVAL) {
+            writesSinceCleanup.set(0)
+            database.logDao().deleteOlderThan(
+                System.currentTimeMillis() - RETENTION_DAYS * MILLIS_PER_DAY
+            )
+            database.logDao().trimToNewest(MAX_ROWS)
+        }
     }
+
+    private val writesSinceCleanup = AtomicInteger()
 
     companion object {
         @Volatile
@@ -68,9 +97,17 @@ class LogRepository private constructor(
 
         fun getInstance(context: Context): LogRepository {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: LogRepository(AppDatabase.getInstance(context)).also { INSTANCE = it }
+                INSTANCE ?: LogRepository(
+                    AppDatabase.getInstance(context),
+                    SessionManager.getInstance(context)
+                ).also { INSTANCE = it }
             }
         }
+
+        private const val MAX_ROWS = 2_000
+        private const val RETENTION_DAYS = 30L
+        private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1_000L
+        private const val CLEANUP_INTERVAL = 50
     }
 }
 

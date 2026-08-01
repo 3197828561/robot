@@ -70,8 +70,8 @@ curl -X POST http://47.103.157.213/api/auth/login \
 | Topic | Payload | 用途 | App 处理 |
 |-------|--------------|------|----------|
 | `device/{productType}/{deviceId}/heartbeat` | `HeartbeatMessage` | 设备在线心跳 | 顶部在线状态 |
-| `device/{productType}/{deviceId}/status` | `StatusMessage` | 电量、工作状态、控制模式、速度、设备状态、运动状态 | 主监控页实时刷新 |
-| `device/{productType}/{deviceId}/cmd_ack` | `CmdAckMessage` | `cmd` 指令处理结果 | Toast + 本地日志 |
+| `device/{productType}/{deviceId}/status` | `StatusMessage` | 设备摘要、任务状态、运行模式、安全状态 | 主监控页实时刷新并判定任务最终状态 |
+| `device/{productType}/{deviceId}/cmd_ack` | `CmdAckMessage` | `cmd` 是否被任务层同步受理 | 命令受理反馈，不代表任务完成 |
 | `device/{productType}/{deviceId}/map` | `MapMessage` | 地图文件通知 | 后续地图展示/下载 |
 | `device/{productType}/{deviceId}/pose` | `PoseMessage` | 地图离散位姿与朝向 | 机器人位置和最近 10 秒轨迹 |
 
@@ -88,24 +88,86 @@ App 会先校验：
 
 | Topic | Payload type | 用途 | App 入口 |
 |-------|--------------|------|----------|
-| `device/{productType}/{deviceId}/remote` | `remote` | 四向按钮固定速度手动控制 | `publishRemote()` |
-| `device/{productType}/{deviceId}/cmd` | `cmd` | start/stop/estop/clear_estop | `publishCmd()` |
+| `device/{productType}/{deviceId}/remote` | `remote` | 手动模式下四向可配置速度控制，QoS 0 | `publishRemote()` |
+| `device/{productType}/{deviceId}/cmd` | `cmd` | start/stop/pause/resume/replan/manual/auto/estop/clear_estop | `prepareCommand()` + `publishCmd()` |
 
 遥控映射：
 
 | 操作 | `linearSpeedCms` | `angularSpeedRadps` |
 |------|------------------------|--------------------------|
-| 前进 | `+20.0` | `0.0` |
-| 后退 | `-20.0` | `0.0` |
-| 左转 | `0.0` | `-0.5` |
-| 右转 | `0.0` | `+0.5` |
+| 前进 | `+L` | `0.0` |
+| 后退 | `-L` | `0.0` |
+| 左转 | `0.0` | `+A` |
+| 右转 | `0.0` | `-A` |
 | 停止 | `0.0` | `0.0` |
 | 急停 | 发布 `cmd = "estop"` | - |
 
-`remote` 使用 `durationMs = 300`，硬件侧超过 `1000ms` 未收到新的 `remote` 应自动停车。
-方向按钮按住前 `500ms` 不发送；超过后以 `20Hz` 发送。松开、页面退出、应用进入后台、
-断连、心跳超时、自动运行、急停或设备异常时，App 发送零速度并终止周期发送。多个方向
-按钮同时按下时同样发送零速度，并提示用户不能同时操作。
+`L` 为 APP UI 设置的非负线速度大小，范围 `0..50 cm/s`；`A` 为非负角速度
+大小，范围 `0..0.5 rad/s`。预设为慢速 `10/0.1`、标准 `30/0.3`、高速
+`50/0.5`，默认标准档。自定义值按设备保存；线速度步进 `1 cm/s`，角速度
+步进 `0.1 rad/s`。方向键只负责绑定正负号，最终下行范围分别为
+`[-50, 50] cm/s` 与 `[-0.5, 0.5] rad/s`。长按过程中修改速度时，下一帧
+周期消息即使用新值。
+
+进入手动遥控前，App 先发送 `manual`，等待成功 ACK 及
+`status.operationalMode=manual` 后才允许发送 `remote`。方向按钮按住前 `500ms`
+不发送；超过后以约 `20Hz`、QoS 0 发送。松开、页面退出、应用进入后台、断连、
+心跳超时或安全状态异常时，App 主动发送零速度并终止周期发送。退出遥控页后发送
+`auto`，并等待 `status.operationalMode=auto`。Robot 的遥控超时停车只作为异常防线。
+
+`cmd_ack.ackStatus=success` 只表示命令被任务层受理。`start` 的最终结果由
+`status.missionId/runState` 驱动；`stop/pause/resume/replan` 必须携带最新
+`status.missionId` 作为 `targetMissionId`。
+
+`start` 在发送前由任务配置弹窗收集完整 coverage 参数：
+
+```text
+mapId / mapVersion
+useCurrentPose
+start.blockId / cellRow / cellCol / innerRow / innerCol / heading
+targetBlockIds
+globalPlan
+```
+
+`useCurrentPose=false` 时 `start` 必填；目标区域必须存在、可清洁、大于 0 且不能重复。
+命令发送失败、ACK 失败、ACK 超时或连接中断后，重试复用原 `PreparedCommand`，因此
+`cmdId/timestamp/payload` 均保持不变。
+
+任务状态页展示以下 Robot 字段，安全状态显示优先于任务运行状态：
+
+```text
+missionId taskKind runState operationalMode safetyState phase activeAction
+waypointIndex waypointCount errorCode errorRetryable errorSource errorMessage
+```
+
+### 4.3 发布兼容性
+
+本次升级保持 MQTT topic 和 payload `version="1.0"` 不变，但任务命令 payload、
+ACK 语义、任务状态字段和遥控前置流程不向后兼容。新版 App 必须和支持新版
+`/mission/command` 的 Robot 成对发布，禁止向旧 `/mission/task_cmd` 双写，也禁止
+新版 App 与旧 Robot 混用。
+
+当前 MQTT payload 没有可用于自动识别新旧 Robot 的接口能力字段，因此版本绑定必须
+由发布配置、设备固件白名单或服务端设备能力信息保证。真实发布前需记录：
+
+```text
+App version/versionCode
+Robot image/firmware version
+mission command API capability
+MQTT cmd/cmd_ack/status 抓包
+Robot MQTT/ROS 两侧日志
+```
+
+当前第三版 APP 发布标识固定为：
+
+```text
+App versionName/versionCode: 1.2.0 / 3
+mission command API capability: mission_command_v2
+```
+
+上述标识已写入 `BuildConfig.MISSION_COMMAND_API_CAPABILITY` 并展示在状态详情页。
+它用于发布记录和与 Robot 镜像成对验收，不代表 APP 可以自动识别旧 Robot；在
+HTTP 设备接口增加能力字段之前，发布负责人仍必须执行 Robot 固件白名单校验。
 
 ## 5. 服务器部署入口
 

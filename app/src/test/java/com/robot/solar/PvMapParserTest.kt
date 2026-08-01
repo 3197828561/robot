@@ -69,6 +69,13 @@ class PvMapParserTest {
         assertEquals(4, map.bridges.size)
     }
 
+    @Test
+    fun parse_supportsUint32MapVersionUpperBound() {
+        val map = parser.parse(validMap.replace("\"version\":3", "\"version\":4294967295"))
+
+        assertEquals(4_294_967_295L, map.version)
+    }
+
     private val validMap = """
         {
           "map_id":7,

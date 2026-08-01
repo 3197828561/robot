@@ -103,6 +103,34 @@ object ProtocolDisplayText {
         else -> "--"
     }
 
+    fun taskKind(value: String?): String = when (value) {
+        "coverage" -> "覆盖清扫"
+        "return_to_charge" -> "返回充电"
+        null, "" -> "--"
+        else -> value
+    }
+
+    fun orchestrationState(value: String?): String = when (value) {
+        "idle" -> "空闲"
+        "running" -> "根任务运行中"
+        "paused_by_user" -> "用户暂停"
+        "paused_by_safety" -> "安全原因暂停"
+        "running_child" -> "执行内部子任务"
+        "resuming" -> "恢复根任务中"
+        "succeeded" -> "根任务已完成"
+        "failed" -> "根任务失败"
+        "canceled" -> "根任务已取消"
+        "unknown" -> "未知"
+        null, "" -> "--"
+        else -> value
+    }
+
+    fun interruptionReason(value: String?): String = when (value) {
+        "LOW_BATTERY" -> "低电量"
+        null, "" -> "--"
+        else -> value
+    }
+
     fun jobStatus(context: Context, value: String?): String = context.getString(
         when (value) {
             "pending", "queued" -> R.string.job_status_pending

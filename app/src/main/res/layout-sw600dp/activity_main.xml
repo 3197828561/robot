@@ -280,52 +280,86 @@
                                 android:textSize="17sp"
                                 android:textStyle="bold" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnStart"
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="12dp"
-                                android:text="开始运行"
-                                android:textColor="@color/solar_on_primary"
-                                app:backgroundTint="@color/control_primary"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnStopRun"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="停止运行"
-                                android:textColor="@color/solar_on_primary"
-                                app:backgroundTint="@color/control_warning"
-                                app:cornerRadius="8dp" />
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnStart"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="开始运行"
+                                    android:textColor="@color/solar_on_primary"
+                                    app:backgroundTint="@color/control_primary"
+                                    app:cornerRadius="8dp" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnPause"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="暂停任务"
-                                app:cornerRadius="8dp" />
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnStopRun"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="停止运行"
+                                    android:textColor="@color/solar_on_primary"
+                                    app:backgroundTint="@color/control_warning"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnResume"
-                                style="?attr/materialButtonOutlinedStyle"
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="继续任务"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnReplan"
-                                style="?attr/materialButtonOutlinedStyle"
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnPause"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="暂停任务"
+                                    app:cornerRadius="8dp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnResume"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="恢复任务"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
+
+                            <LinearLayout
                                 android:layout_width="match_parent"
-                                android:layout_height="48dp"
+                                android:layout_height="wrap_content"
                                 android:layout_marginTop="8dp"
-                                android:text="重新规划"
-                                app:cornerRadius="8dp" />
+                                android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnReplan"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_weight="1"
+                                    android:text="重新规划"
+                                    app:cornerRadius="8dp" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnClearEstop"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="0dp"
+                                    android:layout_height="48dp"
+                                    android:layout_marginStart="8dp"
+                                    android:layout_weight="1"
+                                    android:text="解除急停"
+                                    app:cornerRadius="8dp" />
+                            </LinearLayout>
+
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnEmergency"
                                 android:layout_width="match_parent"
@@ -335,15 +369,6 @@
                                 android:textColor="@color/solar_on_primary"
                                 android:textStyle="bold"
                                 app:backgroundTint="@color/control_danger"
-                                app:cornerRadius="8dp" />
-
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnClearEstop"
-                                style="?attr/materialButtonOutlinedStyle"
-                                android:layout_width="match_parent"
-                                android:layout_height="48dp"
-                                android:layout_marginTop="8dp"
-                                android:text="解除急停"
                                 app:cornerRadius="8dp" />
 
                             <TextView
@@ -369,83 +394,54 @@
                 app:strokeColor="@color/control_stroke"
                 app:strokeWidth="1dp">
 
-                <LinearLayout
+                <androidx.core.widget.NestedScrollView
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:orientation="vertical"
-                    android:padding="14dp">
+                    android:fillViewport="true">
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
+                        android:orientation="vertical"
+                        android:padding="14dp">
 
-                        <TextView
-                            android:layout_width="0dp"
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="最近命令记录"
-                            android:textColor="@color/control_title"
-                            android:textSize="17sp"
-                            android:textStyle="bold" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
 
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnViewLogs"
-                            style="?attr/borderlessButtonStyle"
-                            android:layout_width="wrap_content"
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="最近命令记录"
+                                android:textColor="@color/control_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnViewLogs"
+                                style="?attr/borderlessButtonStyle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="查看更多日志"
+                                android:textColor="@color/control_primary"
+                                android:textSize="13sp" />
+                        </LinearLayout>
+
+                        <HorizontalScrollView
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="查看更多日志"
-                            android:textColor="@color/control_primary"
-                            android:textSize="13sp" />
-                    </LinearLayout>
+                            android:layout_marginTop="10dp"
+                            android:fillViewport="true"
+                            android:scrollbars="none">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:background="@color/control_page_bg"
-                        android:padding="8dp"
-                        android:text="时间                         命令                         参数                         状态                         说明"
-                        android:textColor="@color/control_text_muted"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow1"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow2"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow3"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvCommandRow4"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:padding="8dp"
-                        android:text="--    --    --    --    --"
-                        android:textColor="@color/control_text"
-                        android:textSize="12sp" />
+                            <com.robot.solar.ui.main.CommandHistoryTableView
+                                android:id="@+id/commandHistoryTable"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content" />
+                        </HorizontalScrollView>
 
                     <TextView
                         android:id="@+id/tvCommandState"
@@ -455,7 +451,16 @@
                         android:text="最近操作：-- · --"
                         android:textColor="@color/control_text_muted"
                         android:textSize="12sp" />
-                </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnRetryCommand"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="6dp"
+                        android:text="重试最近失败命令" />
+                    </LinearLayout>
+                </androidx.core.widget.NestedScrollView>
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
@@ -637,9 +642,9 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:gravity="center"
+                    android:gravity="center_horizontal"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="10dp">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -649,19 +654,67 @@
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
+                    <TextView
+                        android:id="@+id/tvRemoteModeState"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center"
+                        android:text="运行模式：-- · 安全状态：--"
+                        android:textColor="@color/control_text_muted" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:orientation="horizontal">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnEnterManualMode"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="进入手动模式" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnReturnAutoMode"
+                            style="?attr/materialButtonOutlinedStyle"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_marginStart="8dp"
+                            android:layout_weight="1"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:text="切回自动模式" />
+                    </LinearLayout>
+
+                    <Space
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
+
                     <com.robot.solar.ui.main.DirectionPadView
                         android:id="@+id/directionPad"
-                        android:layout_width="300dp"
-                        android:layout_height="300dp" />
+                        android:layout_width="288dp"
+                        android:layout_height="288dp"
+                        android:layout_marginTop="6dp" />
 
                     <TextView
                         android:id="@+id/tvRemoteHint"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
                         android:text="长按方向按钮 0.5 秒后开始控制，松开立即停止"
                         android:textColor="@color/control_text_muted"
-                        android:textSize="15sp" />
+                        android:textSize="13sp" />
+
+                    <Space
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_weight="1" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -679,12 +732,12 @@
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="14dp">
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="控制状态"
+                        android:text="手动控制设置"
                         android:textColor="@color/control_title"
                         android:textSize="18sp"
                         android:textStyle="bold" />
@@ -692,19 +745,27 @@
                     <TextView
                         android:id="@+id/tvRemoteStatus"
                         android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_marginTop="16dp"
-                        android:layout_weight="1"
-                        android:lineSpacingExtra="7dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:lineSpacingExtra="3dp"
                         android:textColor="@color/control_text"
-                        android:textSize="15sp"
-                        tools:text="在线状态：--" />
+                        android:textSize="14sp"
+                        tools:text="连接状态：MQTT -- · 机器人 --&#10;控制条件：模式 -- · 安全 --&#10;手动控制：--" />
+
+                    <com.robot.solar.ui.main.ManualSpeedControlView
+                        android:id="@+id/manualSpeedControl"
+                        android:layout_width="match_parent"
+                        android:layout_height="0dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:layout_weight="1"
+                        android:gravity="center_vertical" />
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRemoteStop"
                         android:layout_width="match_parent"
-                        android:layout_height="56dp"
-                        android:layout_marginBottom="10dp"
+                        android:layout_height="48dp"
+                        android:layout_marginBottom="8dp"
                         android:text="普通停止"
                         android:textSize="18sp"
                         app:backgroundTint="@color/control_warning"
@@ -713,7 +774,7 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnRemoteEmergency"
                         android:layout_width="match_parent"
-                        android:layout_height="64dp"
+                        android:layout_height="54dp"
                         android:text="紧急停止"
                         android:textColor="@color/solar_on_primary"
                         android:textSize="20sp"
@@ -724,10 +785,11 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
-        <FrameLayout
+        <androidx.core.widget.NestedScrollView
             android:id="@+id/sectionStatus"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
+            android:fillViewport="true"
             android:padding="12dp"
             android:visibility="gone">
 
@@ -749,7 +811,7 @@
                     android:textSize="15sp"
                     tools:text="设备名称：--" />
             </com.google.android.material.card.MaterialCardView>
-        </FrameLayout>
+        </androidx.core.widget.NestedScrollView>
     </FrameLayout>
 
     <LinearLayout

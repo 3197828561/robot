@@ -6,7 +6,7 @@ data class Point2D(val u: Double, val v: Double)
 
 data class PvMap(
     @SerializedName("map_id") val mapId: Long,
-    val version: Int,
+    val version: Long,
     val source: MapSource? = null,
     val frame: MapFrame,
     @SerializedName("cell_model") val cellModel: CellModel,
