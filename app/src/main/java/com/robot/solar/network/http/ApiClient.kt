@@ -8,6 +8,7 @@ import com.robot.solar.network.http.dto.FirmwareUpgradeRequest
 import com.robot.solar.network.http.dto.FirmwareUpgradeResponse
 import com.robot.solar.network.http.dto.JobDto
 import com.robot.solar.network.http.dto.LoginRequest
+import com.robot.solar.network.http.dto.RefreshRequest
 import com.robot.solar.network.http.dto.TokenResponse
 import com.robot.solar.network.http.dto.WifiConfigDto
 import com.robot.solar.network.http.dto.WifiConfigUpdate
@@ -28,6 +29,9 @@ interface ApiService {
 
     @POST("auth/login")
     suspend fun login(@Body body: LoginRequest): TokenResponse
+
+    @POST("auth/refresh")
+    suspend fun refresh(@Body body: RefreshRequest): TokenResponse
 
     @GET("devices")
     suspend fun listDevices(): List<DeviceDto>
