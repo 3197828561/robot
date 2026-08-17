@@ -21,7 +21,10 @@ class AuthRepository private constructor(
         try {
             val api = ApiClient.getService(session)
             val resp = api.login(LoginRequest(email.trim(), password))
-            session.accessToken = resp.accessToken
+            session.saveAuthTokens(
+                accessToken = resp.accessToken,
+                refreshToken = resp.refreshToken
+            )
             session.userEmail = email.trim()
             Result.success(Unit)
         } catch (e: Exception) {
