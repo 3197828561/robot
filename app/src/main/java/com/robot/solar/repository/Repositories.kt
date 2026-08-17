@@ -25,6 +25,7 @@ class AuthRepository private constructor(
                 accessToken = resp.accessToken,
                 refreshToken = resp.refreshToken
             )
+            ApiClient.markAuthenticated()
             session.userEmail = email.trim()
             Result.success(Unit)
         } catch (e: Exception) {

@@ -45,6 +45,14 @@ class SessionManager private constructor(context: Context) {
 
     fun hasSelectedDevice(): Boolean = !deviceId.isNullOrBlank()
 
+    fun clearAuth() {
+        prefs.edit {
+            remove(KEY_TOKEN)
+            remove(KEY_REFRESH_TOKEN)
+            remove(KEY_EMAIL)
+        }
+    }
+
     fun clear() {
         prefs.edit { clear() }
     }

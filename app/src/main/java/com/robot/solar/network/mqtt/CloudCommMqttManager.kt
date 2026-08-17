@@ -903,5 +903,9 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                 INSTANCE ?: CloudCommMqttManager(context.applicationContext).also { INSTANCE = it }
             }
         }
+
+        fun shutdownIfInitialized() {
+            INSTANCE?.shutdown()
+        }
     }
 }

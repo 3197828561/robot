@@ -27,6 +27,7 @@ import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 
 interface ApiService {
@@ -69,6 +70,18 @@ object ApiClient {
 
     private var service: ApiService? = null
     private val refreshLock = Any()
+    private val authExpiredNotified = AtomicBoolean(false)
+
+    @Volatile
+    private var authExpiredHandler: (() -> Unit)? = null
+
+    fun setAuthExpiredHandler(handler: (() -> Unit)?) {
+        authExpiredHandler = handler
+    }
+
+    fun markAuthenticated() {
+        authExpiredNotified.set(false)
+    }
 
     fun getService(sessionManager: SessionManager): ApiService {
         return service ?: synchronized(this) {
@@ -116,6 +129,7 @@ object ApiClient {
 
         val authenticator = Authenticator { _: Route?, response: Response ->
             if (responseCount(response) >= 2) {
+                notifyAuthExpired(sessionManager)
                 return@Authenticator null
             }
 
@@ -142,7 +156,11 @@ object ApiClient {
 
                 val refreshToken = sessionManager.refreshToken
                     ?.takeIf { it.isNotBlank() }
-                    ?: return@synchronized null
+
+                if (refreshToken == null) {
+                    notifyAuthExpired(sessionManager)
+                    return@synchronized null
+                }
 
                 try {
                     val refreshResponse = refreshService
@@ -150,6 +168,9 @@ object ApiClient {
                         .execute()
 
                     if (!refreshResponse.isSuccessful) {
+                        if (refreshResponse.code() in listOf(400, 401, 403)) {
+                            notifyAuthExpired(sessionManager)
+                        }
                         return@synchronized null
                     }
 
@@ -167,6 +188,7 @@ object ApiClient {
                         accessToken = tokenResponse.accessToken,
                         refreshToken = tokenResponse.refreshToken
                     )
+                    markAuthenticated()
 
                     response.request.newBuilder()
                         .header(
@@ -194,6 +216,13 @@ object ApiClient {
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)
+    }
+
+    private fun notifyAuthExpired(sessionManager: SessionManager) {
+        if (!authExpiredNotified.compareAndSet(false, true)) return
+
+        sessionManager.clearAuth()
+        authExpiredHandler?.invoke()
     }
 
     private fun responseCount(response: Response): Int {
