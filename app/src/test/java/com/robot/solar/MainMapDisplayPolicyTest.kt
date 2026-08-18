@@ -11,12 +11,10 @@ import com.robot.solar.map.MapSyncSource
 import com.robot.solar.map.PvMap
 import com.robot.solar.network.http.dto.ActiveMapDto
 import com.robot.solar.network.http.dto.CurrentMapResponse
-import com.robot.solar.network.mqtt.MapLoadStatus
-import com.robot.solar.network.mqtt.MapMessage
-import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.ui.main.MainMapDisplayPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.io.File
 
@@ -24,31 +22,25 @@ class MainMapDisplayPolicyTest {
     @Test
     fun select_usesHttpMapV2WhenAvailable() {
         val httpMap = pvMap(mapId = 10, version = 2)
-        val mqttMap = pvMap(mapId = 1, version = 1)
         val httpState = MapRepositoryState(
             currentResult = mapSyncResult(httpMap, mapName = "http-map")
         )
-        val mqttState = mqttMapState(mqttMap)
 
-        val selected = MainMapDisplayPolicy.select(httpState, mqttState)
+        val selected = MainMapDisplayPolicy.select(httpState)
 
-        assertEquals(MapLoadStatus.READY, selected.status)
         assertSame(httpMap, selected.pvMap)
-        assertEquals(10L, selected.map!!.mapId)
-        assertEquals(2L, selected.map!!.mapVersion)
-        assertEquals("http-map", selected.map!!.mapName)
+        assertEquals(10L, selected.mapId)
+        assertEquals(2L, selected.mapVersion)
+        assertEquals("http-map", selected.mapName)
     }
 
     @Test
-    fun select_fallsBackToMqttMapWhenHttpMapV2IsUnavailable() {
-        val mqttMap = pvMap(mapId = 1, version = 1)
-        val mqttState = mqttMapState(mqttMap)
+    fun select_returnsNoMapWhenHttpMapV2IsUnavailable() {
+        val selected = MainMapDisplayPolicy.select(MapRepositoryState())
 
-        val selected = MainMapDisplayPolicy.select(MapRepositoryState(), mqttState)
-
-        assertSame(mqttState, selected)
-        assertSame(mqttMap, selected.pvMap)
-        assertEquals(1L, selected.map!!.mapId)
+        assertNull(selected.pvMap)
+        assertNull(selected.mapId)
+        assertEquals("暂无地图", selected.message)
     }
 
     private fun mapSyncResult(map: PvMap, mapName: String): MapSyncResult {
@@ -74,26 +66,6 @@ class MainMapDisplayPolicyTest {
             source = MapSyncSource.DOWNLOAD
         )
     }
-
-    private fun mqttMapState(map: PvMap): MapUiState =
-        MapUiState(
-            status = MapLoadStatus.READY,
-            message = "MQTT map ready",
-            map = MapMessage(
-                version = "1.0",
-                deviceId = "crawler_1",
-                productType = "crawler",
-                timestamp = "2026-08-19T00:00:00.000Z",
-                mapId = map.mapId,
-                mapName = "mqtt-map",
-                mapVersion = map.version,
-                mapJsonUrl = "https://example.test/mqtt-map.json",
-                fileSizeBytes = 100,
-                checksum = "sha256:${"1".repeat(64)}"
-            ),
-            cachePath = "mqtt-cache.json",
-            pvMap = map
-        )
 
     private fun pvMap(mapId: Long, version: Long): PvMap =
         PvMap(

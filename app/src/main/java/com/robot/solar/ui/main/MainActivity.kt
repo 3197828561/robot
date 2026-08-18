@@ -19,15 +19,13 @@ import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.map.MapPosition
 import com.robot.solar.map.MapRepositoryState
+import com.robot.solar.map.PvMap
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageStart
 import com.robot.solar.network.mqtt.CoverageTaskSelection
-import com.robot.solar.network.mqtt.MapLoadStatus
-import com.robot.solar.network.mqtt.MapMessage
-import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.ui.common.ProtocolDisplayText
@@ -54,8 +52,7 @@ class MainActivity : AppCompatActivity() {
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     private var currentAvailability = ControlAvailability()
     private val mapParser = PvMapParser()
-    private var currentMapState = MapUiState()
-    private var latestMqttMapState = MapUiState()
+    private var currentMapState = MainDisplayedMapState()
     private var latestHttpMapV2State = MapRepositoryState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
@@ -134,10 +131,6 @@ class MainActivity : AppCompatActivity() {
         viewModel.status.observe(this) { bindStatus(it) }
         viewModel.missionState.observe(this) { bindStatus(viewModel.status.value) }
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
-        viewModel.mapState.observe(this) {
-            latestMqttMapState = it
-            bindSelectedMap()
-        }
         viewModel.httpMapV2State.observe(this) {
             latestHttpMapV2State = it
             bindSelectedMap()
@@ -196,7 +189,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnEnterManualMode.setOnClickListener { viewModel.enterRemoteMode() }
         binding.btnReturnAutoMode.setOnClickListener { viewModel.exitRemoteMode() }
         binding.btnRetryCommand.setOnClickListener { viewModel.retryLastCommand() }
-        binding.btnReloadMap.setOnClickListener { viewModel.retryMapDownload() }
+        binding.btnReloadMap.setOnClickListener { viewModel.onScreenReady() }
         binding.btnCenterRobot.setOnClickListener {
             if (!binding.mapPreviewView.centerRobot()) {
                 binding.mapPreviewView.resetViewport()
@@ -438,8 +431,8 @@ class MainActivity : AppCompatActivity() {
         ).joinToString("\n")
 
         binding.tvStatusMapSummary.text = listOf(
-            "mapId：${currentMapState.map?.mapId ?: "--"}",
-            "mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+            "mapId：${currentMapState.mapId ?: "--"}",
+            "mapVersion：${currentMapState.mapVersion ?: "--"}",
             "blockId：${currentPose?.blockId ?: "--"}",
             "cellId：${currentPose?.cellId ?: "--"}",
             "heading：${currentPose?.let { ProtocolDisplayText.mapHeading(it.headingCode, it.heading) } ?: "--"}"
@@ -523,9 +516,9 @@ class MainActivity : AppCompatActivity() {
         "错误来源 errorSource：${status?.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
         "错误信息 errorMessage：${status?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
         "",
-        "【MQTT map（允许本地缓存）/ pose】",
-        "地图编号 mapId：${currentMapState.map?.mapId ?: "--"}",
-        "地图版本 mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+        "【HTTP Map V2 / MQTT pose】",
+        "地图编号 mapId：${currentMapState.mapId ?: "--"}",
+        "地图版本 mapVersion：${currentMapState.mapVersion ?: "--"}",
         "当前区域 blockId：${currentPose?.blockId ?: "--"}",
         "当前单元 cellId：${currentPose?.cellId ?: "--"}",
         "机器人朝向 heading：${
@@ -539,27 +532,21 @@ class MainActivity : AppCompatActivity() {
     ).joinToString("\n")
 
     private fun bindSelectedMap() {
-        bindMap(MainMapDisplayPolicy.select(latestHttpMapV2State, latestMqttMapState))
+        bindMap(MainMapDisplayPolicy.select(latestHttpMapV2State))
     }
 
-    private fun bindMap(mapState: MapUiState) {
+    private fun bindMap(mapState: MainDisplayedMapState) {
         currentMapState = mapState
-        val stateText = when (mapState.status) {
-            MapLoadStatus.NO_MAP -> "暂无地图"
-            MapLoadStatus.DOWNLOADING -> "正在加载"
-            MapLoadStatus.READY -> "地图已加载"
-            MapLoadStatus.FAILED -> "地图加载失败"
-        }
+        val stateText = mapState.message
         binding.tvMapState.text = stateText
         binding.tvMapPageState.text = stateText
-        val map = mapState.map
-        val meta = if (map == null) {
+        val meta = if (mapState.mapId == null) {
             "--"
         } else {
-            "地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
+            "地图：${mapState.mapName ?: "--"}  编号：${mapState.mapId}  版本：${mapState.mapVersion ?: "--"}"
         }
         binding.tvMapMeta.text = meta
-        val readyMap = mapState.pvMap.takeIf { mapState.status == MapLoadStatus.READY }
+        val readyMap = mapState.pvMap
         binding.tvMapPageMeta.text = readyMap?.let {
             "■ 光伏板区域（${it.cells.size}）"
         } ?: "■ 光伏板区域"
@@ -788,28 +775,27 @@ private enum class Page {
 }
 
 internal object MainMapDisplayPolicy {
-    fun select(httpState: MapRepositoryState, mqttState: MapUiState): MapUiState {
+    fun select(httpState: MapRepositoryState): MainDisplayedMapState {
         val result = httpState.currentResult
-        val pvMap = result?.pvMap ?: return mqttState
+        val pvMap = result?.pvMap ?: return MainDisplayedMapState()
         val current = result.current
         val activeMap = current.activeMap
-        return MapUiState(
-            status = MapLoadStatus.READY,
+        return MainDisplayedMapState(
             message = "HTTP Map V2 地图已加载",
-            map = MapMessage(
-                version = null,
-                deviceId = current.deviceId,
-                productType = current.productType,
-                timestamp = current.lastReportedAt,
-                mapId = activeMap.mapId,
-                mapName = activeMap.mapName,
-                mapVersion = activeMap.mapVersion,
-                mapJsonUrl = activeMap.contentUrl,
-                fileSizeBytes = activeMap.fileSizeBytes,
-                checksum = activeMap.checksum
-            ),
+            mapId = activeMap.mapId,
+            mapVersion = activeMap.mapVersion,
+            mapName = activeMap.mapName,
             cachePath = result.cacheFile.absolutePath,
             pvMap = pvMap
         )
     }
 }
+
+internal data class MainDisplayedMapState(
+    val message: String = "暂无地图",
+    val mapId: Long? = null,
+    val mapVersion: Long? = null,
+    val mapName: String? = null,
+    val cachePath: String? = null,
+    val pvMap: PvMap? = null
+)

@@ -30,7 +30,6 @@ import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageCommandParams
 import com.robot.solar.network.mqtt.CoverageTaskSelection
 import com.robot.solar.network.mqtt.DeviceTopicIdentity
-import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.MissionState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.PreparedCommand
@@ -83,7 +82,6 @@ class MainViewModel internal constructor(
     val status: LiveData<StatusMessage?> = mqtt.status
     val missionState: LiveData<MissionState> = mqtt.missionState
     val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
-    val mapState: LiveData<MapUiState> = mqtt.mapState
     val httpMapV2State: LiveData<MapRepositoryState> = mapRepository.state.asLiveData()
     val pose: LiveData<PoseMessage?> = mqtt.pose
     private val _manualSpeedSettings = MutableLiveData(manualSpeedSnapshot)
@@ -314,7 +312,7 @@ class MainViewModel internal constructor(
     }
 
     fun startCoverage(selection: CoverageTaskSelection) {
-        val map = mapState.value?.pvMap
+        val map = httpMapV2State.value?.currentResult?.pvMap
         if (map == null) {
             rejectCommand("start", "请先加载有效地图")
             return
@@ -834,8 +832,6 @@ class MainViewModel internal constructor(
         mqtt.shutdown()
     }
 
-    fun retryMapDownload() = mqtt.retryMapDownload()
-
     private fun directionText(direction: ManualDirection): String = when (direction) {
         ManualDirection.FORWARD -> "前进"
         ManualDirection.BACKWARD -> "后退"
@@ -956,7 +952,6 @@ internal interface MainMqttGateway {
     val status: LiveData<StatusMessage?>
     val missionState: LiveData<MissionState>
     val lastHeartbeatAt: LiveData<Long?>
-    val mapState: LiveData<MapUiState>
     val pose: LiveData<PoseMessage?>
     val lastCmdAck: LiveData<CmdAckMessage?>
 
@@ -965,7 +960,6 @@ internal interface MainMqttGateway {
     fun prepareCommand(action: String, params: Any = emptyMap<String, Any?>()): PreparedCommand?
     fun publishCmd(command: PreparedCommand): CommandPublishResult
     fun shutdown()
-    fun retryMapDownload()
 }
 
 private class CloudMqttGateway(
@@ -977,7 +971,6 @@ private class CloudMqttGateway(
     override val status: LiveData<StatusMessage?> = mqtt.status
     override val missionState: LiveData<MissionState> = mqtt.missionState
     override val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
-    override val mapState: LiveData<MapUiState> = mqtt.mapState
     override val pose: LiveData<PoseMessage?> = mqtt.pose
     override val lastCmdAck: LiveData<CmdAckMessage?> = mqtt.lastCmdAck
 
@@ -990,7 +983,6 @@ private class CloudMqttGateway(
 
     override fun publishCmd(command: PreparedCommand): CommandPublishResult = mqtt.publishCmd(command)
     override fun shutdown() = mqtt.shutdown()
-    override fun retryMapDownload() = mqtt.retryMapDownload()
 }
 
 internal interface MainDeviceIdentityProvider {

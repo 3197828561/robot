@@ -64,19 +64,6 @@ data class CmdAckMessage(
     val errorCode: String?
 )
 
-data class MapMessage(
-    val version: String?,
-    val deviceId: String?,
-    val productType: String?,
-    val timestamp: String?,
-    val mapId: Long?,
-    val mapName: String?,
-    val mapVersion: Long?,
-    val mapJsonUrl: String?,
-    val fileSizeBytes: Long?,
-    val checksum: String?
-)
-
 data class PoseMessage(
     val version: String?,
     val deviceId: String?,
@@ -251,18 +238,3 @@ enum class CommandStatus {
     TIMEOUT,
     CONNECTION_LOST
 }
-
-enum class MapLoadStatus {
-    NO_MAP,
-    DOWNLOADING,
-    READY,
-    FAILED
-}
-
-data class MapUiState(
-    val status: MapLoadStatus = MapLoadStatus.NO_MAP,
-    val message: String = "暂无地图",
-    val map: MapMessage? = null,
-    val cachePath: String? = null,
-    val pvMap: com.robot.solar.map.PvMap? = null
-)

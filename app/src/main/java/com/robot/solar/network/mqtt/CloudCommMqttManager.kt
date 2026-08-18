@@ -16,11 +16,7 @@ import com.robot.solar.entity.LogSource
 import com.robot.solar.entity.StructuredLogDraft
 import com.robot.solar.logging.AppLogPolicy
 import com.robot.solar.logging.StatusLogSnapshot
-import com.robot.solar.map.PvMap
-import com.robot.solar.map.PvMapParser
 import com.robot.solar.utils.LogUtils
-import java.io.File
-import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -33,8 +29,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended
 import org.eclipse.paho.client.mqttv3.MqttClient
@@ -48,20 +42,16 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val gson = Gson()
-    private val mapParser = PvMapParser(gson)
-    private val httpClient = OkHttpClient()
     private var client: MqttClient? = null
     private var boundDeviceId: String? = null
     private var boundProductType: String? = null
     private val connecting = AtomicBoolean(false)
     private var reconnectJob: Job? = null
     private var heartbeatJob: Job? = null
-    private var mapJob: Job? = null
     private var lastHeartbeatMillis: Long? = null
     @Volatile
     private var loggedOnlineState: Boolean? = null
     private var loggedStatusSnapshot: StatusLogSnapshot? = null
-    private var loggedMapSignature: String? = null
 
     private val _mqttConnected = MutableLiveData(false)
     val mqttConnected: LiveData<Boolean> = _mqttConnected
@@ -86,9 +76,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
 
     private val _lastCmdAck = MutableLiveData<CmdAckMessage?>()
     val lastCmdAck: LiveData<CmdAckMessage?> = _lastCmdAck
-
-    private val _mapState = MutableLiveData(MapUiState())
-    val mapState: LiveData<MapUiState> = _mapState
 
     private val _pose = MutableLiveData<PoseMessage?>(null)
     val pose: LiveData<PoseMessage?> = _pose
@@ -141,14 +128,12 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         boundDeviceId = deviceId
         boundProductType = productType
         startHeartbeatMonitor()
-        loadCurrentCachedMapIfNeeded()
         scope.launch { tryConnectIfNeeded("绑定设备 $productType/$deviceId") }
     }
 
     fun shutdown() {
         reconnectJob?.cancel()
         heartbeatJob?.cancel()
-        mapJob?.cancel()
         scope.launch {
             stopClient()
             clearDeviceState()
@@ -169,7 +154,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                                     topicHeartbeat(productType, deviceId),
                                     topicStatus(productType, deviceId),
                                     topicCmdAck(productType, deviceId),
-                                    topicMap(productType, deviceId),
                                     topicPose(productType, deviceId)
                                 )
                             )
@@ -209,7 +193,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         lastHeartbeatMillis = null
         loggedOnlineState = null
         loggedStatusSnapshot = null
-        loggedMapSignature = null
         _lastHeartbeatAt.postValue(null)
         _deviceOnline.postValue(null)
         _batteryPercent.postValue(null)
@@ -217,40 +200,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         _missionState.postValue(MissionState())
         _lastCmdAck.postValue(null)
         _lastCmdFeedback.postValue(null)
-        _mapState.postValue(MapUiState())
         _pose.postValue(null)
-    }
-
-    private fun loadCurrentCachedMapIfNeeded(force: Boolean = false) {
-        if (!force && _mapState.value?.status != MapLoadStatus.NO_MAP) return
-        scope.launch {
-            val cached = runCatching {
-                val map = readCurrentMapRecord() ?: return@runCatching null
-                val mapId = map.mapId ?: return@runCatching null
-                val version = map.mapVersion ?: return@runCatching null
-                val file = cacheFileFor(mapId, version)
-                if (!file.exists()) return@runCatching null
-                verifyChecksumIfNeeded(file.readBytes(), map.checksum)
-                val pvMap = mapParser.parse(file)
-                require(pvMap.mapId == mapId) { "地图 ID 与记录不一致" }
-                require(pvMap.version == version) { "地图版本与记录不一致" }
-                map to file to pvMap
-            }.getOrNull()
-
-            if (cached != null) {
-                val (mapAndFile, pvMap) = cached
-                val (map, file) = mapAndFile
-                _mapState.postValue(
-                    MapUiState(
-                        status = MapLoadStatus.READY,
-                        message = "已加载本地缓存地图",
-                        map = map,
-                        cachePath = file.absolutePath,
-                        pvMap = pvMap
-                    )
-                )
-            }
-        }
     }
 
     private suspend fun tryConnectIfNeeded(reason: String) {
@@ -351,7 +301,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             topicHeartbeat(productType, deviceId),
             topicStatus(productType, deviceId),
             topicCmdAck(productType, deviceId),
-            topicMap(productType, deviceId),
             topicPose(productType, deviceId)
         )
         mqttClient.subscribe(topics, IntArray(topics.size) { COMMAND_QOS })
@@ -361,7 +310,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             result = "success",
             detailJson = JSONObject()
                 .put("prefix", "device/$productType/$deviceId")
-                .put("topics", "heartbeat,status,cmd_ack,map,pose")
+                .put("topics", "heartbeat,status,cmd_ack,pose")
                 .toString()
         )
     }
@@ -420,29 +369,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                         else -> "收到设备操作反馈"
                     }
                     _lastCmdFeedback.postValue(text)
-                }
-                topic.endsWith("/map") -> {
-                    val map = gson.fromJson(payload, MapMessage::class.java)
-                    handleMapMessage(map)
-                    val signature = "${map.mapId}:${map.mapVersion}:${map.checksum}"
-                    if (signature != loggedMapSignature) {
-                        loggedMapSignature = signature
-                        LogUtils.record(
-                            StructuredLogDraft(
-                                source = LogSource.ROBOT,
-                                category = LogCategory.MAP,
-                                eventType = "map_announced",
-                                direction = LogDirection.UPSTREAM,
-                                topic = topic,
-                                summary = "收到地图更新：${map.mapId ?: "--"}/v${map.mapVersion ?: "--"}",
-                                detailJson = JSONObject()
-                                    .put("mapId", map.mapId)
-                                    .put("mapVersion", map.mapVersion)
-                                    .put("mapName", map.mapName)
-                                    .toString()
-                            )
-                        )
-                    }
                 }
                 topic.endsWith("/pose") -> {
                     val pose = gson.fromJson(payload, PoseMessage::class.java)
@@ -678,157 +604,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         return publish(topicRemote(productType, deviceId), json.toString(), REMOTE_QOS)
     }
 
-    fun retryMapDownload() {
-        val map = _mapState.value?.map ?: run {
-            loadCurrentCachedMapIfNeeded(force = true)
-            return
-        }
-        if (map.mapJsonUrl.isNullOrBlank()) {
-            loadCurrentCachedMapIfNeeded(force = true)
-            return
-        }
-        handleMapMessage(map, forceDownload = true)
-    }
-
-    private fun handleMapMessage(map: MapMessage, forceDownload: Boolean = false) {
-        val url = map.mapJsonUrl?.takeIf { it.isNotBlank() }
-        val mapId = map.mapId
-        val version = map.mapVersion
-        if (url == null || mapId == null || version == null) {
-            val current = _mapState.value
-            if (current?.pvMap == null) {
-                loadCurrentCachedMapIfNeeded(force = true)
-            } else {
-                _mapState.postValue(current.copy(message = "未收到有效地图更新，继续显示当前地图"))
-            }
-            return
-        }
-        mapJob?.cancel()
-        mapJob = scope.launch {
-            val previous = _mapState.value
-            _mapState.postValue(
-                previous?.copy(status = MapLoadStatus.DOWNLOADING, message = "正在加载", map = map)
-                    ?: MapUiState(status = MapLoadStatus.DOWNLOADING, message = "正在加载", map = map)
-            )
-            val result = runCatching { downloadAndCacheMap(map, url, mapId, version, forceDownload) }
-            _mapState.postValue(
-                result.fold(
-                    onSuccess = { (path, pvMap) ->
-                        saveCurrentMapRecord(map)
-                        LogUtils.record(
-                            StructuredLogDraft(
-                                source = LogSource.APP,
-                                category = LogCategory.MAP,
-                                eventType = "map_loaded",
-                                result = "success",
-                                summary = "地图 ${mapId}/v$version 加载完成",
-                                detailJson = JSONObject()
-                                    .put("mapId", mapId)
-                                    .put("mapVersion", version)
-                                    .put("cachePath", path)
-                                    .toString()
-                            )
-                        )
-                        MapUiState(status = MapLoadStatus.READY, message = "地图已加载", map = map, cachePath = path, pvMap = pvMap)
-                    },
-                    onFailure = { error ->
-                        LogUtils.record(
-                            StructuredLogDraft(
-                                source = LogSource.APP,
-                                category = LogCategory.MAP,
-                                eventType = "map_load_failed",
-                                severity = LogSeverity.ERROR,
-                                result = "failed",
-                                summary = "地图 ${mapId}/v$version 加载失败",
-                                detailJson = JSONObject()
-                                    .put("reason", error.message)
-                                    .toString()
-                            )
-                        )
-                        previous?.copy(
-                            status = if (previous.pvMap == null) MapLoadStatus.FAILED else previous.status,
-                            message = error.message ?: "地图加载失败，继续显示当前地图",
-                            map = previous.map ?: map
-                        ) ?: MapUiState(status = MapLoadStatus.FAILED, message = error.message ?: "地图加载失败", map = map)
-                    }
-                )
-            )
-        }
-    }
-
-    private fun downloadAndCacheMap(
-        map: MapMessage,
-        url: String,
-        mapId: Long,
-        version: Long,
-        forceDownload: Boolean
-    ): Pair<String, PvMap> {
-        require(url.startsWith("https://") || url.startsWith("http://")) { "mapJsonUrl 不是 HTTP/HTTPS" }
-        val cacheFile = cacheFileFor(mapId, version)
-        if (forceDownload) cacheFile.delete()
-        if (!cacheFile.exists()) {
-            val request = Request.Builder().url(url).build()
-            httpClient.newCall(request).execute().use { response ->
-                require(response.isSuccessful) { "HTTP ${response.code}" }
-                val body = response.body?.bytes() ?: error("地图响应为空")
-                require(body.size <= MAX_MAP_BYTES) { "地图文件过大" }
-                map.fileSizeBytes?.let { require(it == body.size.toLong()) { "地图文件大小不匹配" } }
-                verifyChecksumIfNeeded(body, map.checksum)
-                val parent = cacheFile.parentFile ?: error("地图缓存目录无效")
-                parent.mkdirs()
-                val temporary = File(parent, "${mapId}_${version}.tmp")
-                temporary.writeBytes(body)
-                require(temporary.renameTo(cacheFile)) { "地图缓存写入失败" }
-            }
-        } else {
-            try {
-                verifyChecksumIfNeeded(cacheFile.readBytes(), map.checksum)
-            } catch (error: Exception) {
-                cacheFile.delete()
-                throw error
-            }
-        }
-        val pvMap = mapParser.parse(cacheFile)
-        require(pvMap.mapId == mapId) { "地图 ID 与通知不一致" }
-        require(pvMap.version == version) { "地图版本与通知不一致" }
-        return cacheFile.absolutePath to pvMap
-    }
-
-    private fun cacheFileFor(mapId: Long, version: Long): File {
-        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
-        val deviceId = boundDeviceId ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
-        return File(File(File(appContext.cacheDir, MAP_CACHE_DIR), productType), deviceId)
-            .resolve("${mapId}_${version}.json")
-    }
-
-    private fun currentMapRecordKey(): String {
-        val productType = boundProductType ?: BuildConfig.MQTT_DEFAULT_PRODUCT_TYPE
-        val deviceId = boundDeviceId ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
-        return "${productType}_${deviceId}"
-    }
-
-    private fun readCurrentMapRecord(): MapMessage? {
-        val prefs = appContext.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
-        val raw = prefs.getString(currentMapRecordKey(), null) ?: return null
-        return runCatching { gson.fromJson(raw, MapMessage::class.java) }.getOrNull()
-    }
-
-    private fun saveCurrentMapRecord(map: MapMessage) {
-        val json = gson.toJson(map.copy(timestamp = null))
-        appContext.getSharedPreferences(MAP_PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(currentMapRecordKey(), json)
-            .apply()
-    }
-
-    private fun verifyChecksumIfNeeded(bytes: ByteArray, checksum: String?) {
-        val expected = checksum?.removePrefix("sha256:")?.takeIf { it.isNotBlank() } ?: return
-        val actual = MessageDigest.getInstance("SHA-256")
-            .digest(bytes)
-            .joinToString("") { "%02x".format(it) }
-        require(actual.equals(expected, ignoreCase = true)) { "checksum 不匹配" }
-    }
-
     private fun publish(topic: String, json: String, qos: Int): Boolean {
         val mqttClient = client
         if (mqttClient == null || !mqttClient.isConnected) {
@@ -869,9 +644,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         private const val COMMAND_QOS = 1
         private const val REMOTE_QOS = 0
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
-        private const val MAX_MAP_BYTES = 20 * 1024 * 1024
-        private const val MAP_CACHE_DIR = "maps"
-        private const val MAP_PREFS_NAME = "map_cache"
         private val COMMAND_TIMESTAMP_FORMAT: DateTimeFormatter =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
                 .withZone(ZoneOffset.UTC)
@@ -890,7 +662,6 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
         fun topicHeartbeat(productType: String, deviceId: String) = "device/$productType/$deviceId/heartbeat"
         fun topicStatus(productType: String, deviceId: String) = "device/$productType/$deviceId/status"
         fun topicCmdAck(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd_ack"
-        fun topicMap(productType: String, deviceId: String) = "device/$productType/$deviceId/map"
         fun topicPose(productType: String, deviceId: String) = "device/$productType/$deviceId/pose"
         fun topicCmd(productType: String, deviceId: String) = "device/$productType/$deviceId/cmd"
         fun topicRemote(productType: String, deviceId: String) = "device/$productType/$deviceId/remote"

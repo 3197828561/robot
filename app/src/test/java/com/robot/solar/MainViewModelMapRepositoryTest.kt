@@ -16,7 +16,6 @@ import com.robot.solar.network.http.dto.CurrentMapResponse
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandPublishResult
 import com.robot.solar.network.mqtt.DeviceTopicIdentity
-import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.MissionState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.PreparedCommand
@@ -150,7 +149,6 @@ private class FakeMainMqttGateway : MainMqttGateway {
     override val status: LiveData<StatusMessage?> = MutableLiveData(null)
     override val missionState: LiveData<MissionState> = MutableLiveData(MissionState())
     override val lastHeartbeatAt: LiveData<Long?> = MutableLiveData(null)
-    override val mapState: LiveData<MapUiState> = MutableLiveData(MapUiState())
     override val pose: LiveData<PoseMessage?> = MutableLiveData(null)
     override val lastCmdAck: LiveData<CmdAckMessage?> = MutableLiveData(null)
     var startedDeviceId: String? = null
@@ -167,7 +165,6 @@ private class FakeMainMqttGateway : MainMqttGateway {
     override fun prepareCommand(action: String, params: Any): PreparedCommand? = null
     override fun publishCmd(command: PreparedCommand): CommandPublishResult = CommandPublishResult(false, null, command.cmd)
     override fun shutdown() = Unit
-    override fun retryMapDownload() = Unit
 }
 
 private class FakeDeviceIdentityProvider : MainDeviceIdentityProvider {
