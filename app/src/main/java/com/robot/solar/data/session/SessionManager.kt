@@ -14,6 +14,17 @@ class SessionManager private constructor(context: Context) {
         get() = prefs.getString(KEY_TOKEN, null)
         set(value) = prefs.edit { putString(KEY_TOKEN, value) }
 
+    var refreshToken: String?
+        get() = prefs.getString(KEY_REFRESH_TOKEN, null)
+        private set(value) = prefs.edit { putString(KEY_REFRESH_TOKEN, value) }
+
+    fun saveAuthTokens(accessToken: String, refreshToken: String) {
+        prefs.edit {
+            putString(KEY_TOKEN, accessToken)
+            putString(KEY_REFRESH_TOKEN, refreshToken)
+        }
+    }
+
     var deviceId: String?
         get() = prefs.getString(KEY_DEVICE_ID, null)
         set(value) = prefs.edit { putString(KEY_DEVICE_ID, value) }
@@ -34,6 +45,14 @@ class SessionManager private constructor(context: Context) {
 
     fun hasSelectedDevice(): Boolean = !deviceId.isNullOrBlank()
 
+    fun clearAuth() {
+        prefs.edit {
+            remove(KEY_TOKEN)
+            remove(KEY_REFRESH_TOKEN)
+            remove(KEY_EMAIL)
+        }
+    }
+
     fun clear() {
         prefs.edit { clear() }
     }
@@ -41,6 +60,7 @@ class SessionManager private constructor(context: Context) {
     companion object {
         private const val PREFS = "solar_session"
         private const val KEY_TOKEN = "token"
+        private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_DEVICE_NAME = "device_name"
         private const val KEY_PRODUCT_TYPE = "product_type"

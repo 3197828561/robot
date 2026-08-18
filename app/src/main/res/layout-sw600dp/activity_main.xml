@@ -793,24 +793,204 @@
             android:padding="12dp"
             android:visibility="gone">
 
-            <com.google.android.material.card.MaterialCardView
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:cardBackgroundColor="@color/control_panel"
-                app:cardCornerRadius="10dp"
-                app:strokeColor="@color/control_stroke"
-                app:strokeWidth="1dp">
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:columnCount="2"
+                    android:rowCount="2">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_rowWeight="1"
+                        android:layout_marginEnd="6dp"
+                        android:layout_marginBottom="6dp"
+                        app:cardBackgroundColor="@color/control_panel"
+                        app:cardCornerRadius="10dp"
+                        app:strokeColor="@color/control_stroke"
+                        app:strokeWidth="1dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="12dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="设备与连接"
+                                android:textColor="@color/control_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvStatusConnectionSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:lineSpacingExtra="3dp"
+                                android:textColor="@color/control_text"
+                                android:textSize="14sp"
+                                tools:text="MQTT：已连接&#10;机器人：在线" />
+
+                            <TextView
+                                android:id="@+id/tvStatusDeviceSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:lineSpacingExtra="3dp"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="14sp"
+                                tools:text="电量：80%&#10;工作状态：运行中" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_rowWeight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginBottom="6dp"
+                        app:cardBackgroundColor="@color/control_panel"
+                        app:cardCornerRadius="10dp"
+                        app:strokeColor="@color/control_stroke"
+                        app:strokeWidth="1dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="12dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="当前任务"
+                                android:textColor="@color/control_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvStatusMissionSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:lineSpacingExtra="3dp"
+                                android:textColor="@color/control_text"
+                                android:textSize="14sp"
+                                tools:text="runState：--&#10;phase：--" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_rowWeight="1"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginEnd="6dp"
+                        app:cardBackgroundColor="@color/control_panel"
+                        app:cardCornerRadius="10dp"
+                        app:strokeColor="@color/control_stroke"
+                        app:strokeWidth="1dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="12dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="安全与异常"
+                                android:textColor="@color/control_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvStatusSafetySummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:lineSpacingExtra="3dp"
+                                android:textColor="@color/control_text"
+                                android:textSize="14sp"
+                                tools:text="safetyState：normal&#10;errorCode：--" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:layout_columnWeight="1"
+                        android:layout_rowWeight="1"
+                        android:layout_marginStart="6dp"
+                        android:layout_marginTop="6dp"
+                        app:cardBackgroundColor="@color/control_panel"
+                        app:cardCornerRadius="10dp"
+                        app:strokeColor="@color/control_stroke"
+                        app:strokeWidth="1dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:orientation="vertical"
+                            android:padding="12dp">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="地图与定位"
+                                android:textColor="@color/control_title"
+                                android:textSize="17sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvStatusMapSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:lineSpacingExtra="3dp"
+                                android:textColor="@color/control_text"
+                                android:textSize="14sp"
+                                tools:text="mapId：--&#10;blockId：--" />
+
+                            <TextView
+                                android:id="@+id/tvStatusHeartbeatSummary"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="8dp"
+                                android:textColor="@color/control_text_muted"
+                                android:textSize="14sp"
+                                tools:text="APP 最近收到心跳：--" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </GridLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStatusDiagnostics"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="10dp"
+                    android:text="查看完整诊断信息" />
 
                 <TextView
                     android:id="@+id/tvStatusDetails"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:lineSpacingExtra="8dp"
-                    android:padding="20dp"
-                    android:textColor="@color/control_text"
-                    android:textSize="15sp"
-                    tools:text="设备名称：--" />
-            </com.google.android.material.card.MaterialCardView>
+                    android:layout_width="1dp"
+                    android:layout_height="1dp"
+                    android:visibility="gone" />
+            </LinearLayout>
         </androidx.core.widget.NestedScrollView>
     </FrameLayout>
 

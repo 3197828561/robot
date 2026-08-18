@@ -7,10 +7,20 @@ data class LoginRequest(
     val password: String
 )
 
+data class RefreshRequest(
+    @SerializedName("refresh_token") val refreshToken: String
+)
+
+data class LogoutResponse(
+    val status: String
+)
+
 data class TokenResponse(
     @SerializedName("access_token") val accessToken: String,
+    @SerializedName("refresh_token") val refreshToken: String,
     @SerializedName("token_type") val tokenType: String = "bearer",
-    @SerializedName("expires_in") val expiresIn: Int = 0
+    @SerializedName("expires_in") val expiresIn: Int = 0,
+    @SerializedName("refresh_expires_in") val refreshExpiresIn: Int = 0
 )
 
 data class DeviceDto(

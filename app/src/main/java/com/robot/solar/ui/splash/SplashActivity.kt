@@ -7,10 +7,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.robot.solar.databinding.ActivitySplashBinding
 import com.robot.solar.repository.AuthRepository
-import com.robot.solar.repository.DeviceRepository
 import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.login.LoginActivity
-import com.robot.solar.ui.main.MainActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -27,15 +25,12 @@ class SplashActivity : AppCompatActivity() {
         lifecycleScope.launch {
             delay(600)
             val auth = AuthRepository.getInstance(applicationContext)
-            val device = DeviceRepository.getInstance(applicationContext)
-            when {
-                !auth.isLoggedIn() ->
-                    startActivity(Intent(this@SplashActivity, LoginActivity::class.java))
-                !device.hasDevice() ->
-                    startActivity(Intent(this@SplashActivity, DeviceListActivity::class.java))
-                else ->
-                    startActivity(Intent(this@SplashActivity, MainActivity::class.java))
+            val nextActivity = if (auth.isLoggedIn()) {
+                DeviceListActivity::class.java
+            } else {
+                LoginActivity::class.java
             }
+            startActivity(Intent(this@SplashActivity, nextActivity))
             finish()
         }
     }

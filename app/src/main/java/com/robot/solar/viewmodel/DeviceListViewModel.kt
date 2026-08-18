@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.robot.solar.data.session.SessionManager
 import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.repository.DeviceRepository
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import kotlinx.coroutines.launch
 class DeviceListViewModel(application: Application) : AndroidViewModel(application) {
 
     private val deviceRepository = DeviceRepository.getInstance(application)
+    private val session = SessionManager.getInstance(application)
 
     private val _devices = MutableLiveData<List<DeviceDto>>()
     val devices: LiveData<List<DeviceDto>> = _devices
@@ -31,7 +33,9 @@ class DeviceListViewModel(application: Application) : AndroidViewModel(applicati
             try {
                 _devices.value = deviceRepository.fetchDevices()
             } catch (e: Exception) {
-                _error.value = e.message ?: "加载设备失败"
+                if (session.isLoggedIn()) {
+                    _error.value = e.message ?: "加载设备失败"
+                }
             } finally {
                 _loading.value = false
             }

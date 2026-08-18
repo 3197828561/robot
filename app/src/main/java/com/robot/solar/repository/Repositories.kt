@@ -8,6 +8,7 @@ import com.robot.solar.entity.StructuredLogDraft
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.network.http.ApiClient
 import com.robot.solar.network.http.dto.LoginRequest
+import com.robot.solar.network.http.dto.RefreshRequest
 import com.robot.solar.network.mqtt.DeviceTopicIdentity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,7 +22,11 @@ class AuthRepository private constructor(
         try {
             val api = ApiClient.getService(session)
             val resp = api.login(LoginRequest(email.trim(), password))
-            session.accessToken = resp.accessToken
+            session.saveAuthTokens(
+                accessToken = resp.accessToken,
+                refreshToken = resp.refreshToken
+            )
+            ApiClient.markAuthenticated()
             session.userEmail = email.trim()
             Result.success(Unit)
         } catch (e: Exception) {
@@ -29,9 +34,20 @@ class AuthRepository private constructor(
         }
     }
 
-    fun logout() {
-        session.clear()
-        ApiClient.reset()
+    suspend fun logout() = withContext(Dispatchers.IO) {
+        val refreshToken = session.refreshToken
+
+        try {
+            if (!refreshToken.isNullOrBlank()) {
+                ApiClient.getService(session)
+                    .logout(RefreshRequest(refreshToken))
+            }
+        } catch (_: Exception) {
+            // 服务端 logout 失败不能阻止本地退出
+        } finally {
+            session.clear()
+            ApiClient.reset()
+        }
     }
 
     fun isLoggedIn(): Boolean = session.isLoggedIn()
