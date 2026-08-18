@@ -56,7 +56,6 @@ class DeviceListActivity : AppCompatActivity() {
         viewModel.navigateMain.observe(this) { go ->
             if (go == true) {
                 startActivity(Intent(this, MainActivity::class.java))
-                finish()
                 viewModel.consumeNavigateMain()
             }
         }

@@ -7,6 +7,7 @@ import android.os.Looper
 import android.view.View
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.addCallback
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -76,6 +77,9 @@ class MainActivity : AppCompatActivity() {
         binding.tvProductType.text = "设备类型：${ProtocolDisplayText.productType(this, viewModel.productType)}"
         bindObservers()
         bindControls()
+        onBackPressedDispatcher.addCallback(this) {
+            returnToDeviceList()
+        }
         binding.mapPreviewView.interactionEnabled = true
         binding.mapPreviewView.showLabels = true
         showPage(Page.HOME)
@@ -196,6 +200,13 @@ class MainActivity : AppCompatActivity() {
         binding.btnViewLogs.setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
         }
+        binding.btnStatusDiagnostics.setOnClickListener {
+            MaterialAlertDialogBuilder(this)
+                .setTitle("完整诊断信息")
+                .setMessage(buildStatusDetails(viewModel.status.value))
+                .setPositiveButton("关闭", null)
+                .show()
+        }
 
         binding.directionPad.listener = object : DirectionPadView.Listener {
             override fun onPress(direction: ManualDirection) {
@@ -213,14 +224,31 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnDeviceList.setOnClickListener {
-            viewModel.shutdownMqtt()
-            startActivity(Intent(this, DeviceListActivity::class.java))
-            finish()
+            returnToDeviceList()
         }
         binding.navHome.setOnClickListener { showPage(Page.HOME) }
         binding.navMap.setOnClickListener { showPage(Page.MAP) }
         binding.navRemote.setOnClickListener { showPage(Page.REMOTE) }
         binding.navStatus.setOnClickListener { showPage(Page.STATUS) }
+    }
+
+    private fun returnToDeviceList() {
+        if (currentPage == Page.REMOTE) {
+            binding.directionPad.cancelInput()
+            viewModel.leaveRemotePage()
+        }
+
+        viewModel.shutdownMqtt()
+
+        startActivity(
+            Intent(this, DeviceListActivity::class.java).apply {
+                flags =
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        )
+
+        finish()
     }
 
     private fun showCoverageTaskDialog() {
@@ -362,7 +390,56 @@ class MainActivity : AppCompatActivity() {
             "运行模式：${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
                 "安全状态：${status?.safetyState ?: mission?.safetyState ?: "--"}"
         bindHomeStatusCard(status)
+        bindStatusSummary(status)
     }
+
+    private fun bindStatusSummary(status: StatusMessage?) {
+        binding.tvStatusConnectionSummary.text = listOf(
+            "MQTT：${if (viewModel.mqttConnected.value == true) "已连接" else "未连接"}",
+            "机器人：${when (viewModel.deviceOnline.value) {
+                true -> "在线"
+                false -> "离线"
+                null -> "--"
+            }}"
+        ).joinToString("\n")
+
+        binding.tvStatusDeviceSummary.text = listOf(
+            "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}",
+            "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}",
+            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}",
+            "设备状态：${status?.let { ProtocolDisplayText.deviceStatus(this, it.deviceStatus) } ?: "--"}",
+            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}"
+        ).joinToString("\n")
+
+        binding.tvStatusMissionSummary.text = listOf(
+            "runState：${status?.runState ?: "--"}",
+            "phase：${status?.phase ?: "--"}",
+            "activeAction：${status?.activeAction?.takeIf { it.isNotBlank() } ?: "--"}",
+            "航点：${status?.waypointIndex ?: "--"} / ${status?.waypointCount ?: "--"}",
+            "missionId：${status?.missionId?.let(::compactId) ?: "--"}"
+        ).joinToString("\n")
+
+        binding.tvStatusSafetySummary.text = listOf(
+            "safetyState：${status?.safetyState ?: "--"}",
+            "errorCode：${status?.missionErrorCode ?: "--"}",
+            "retryable：${status?.errorRetryable ?: "--"}",
+            "errorMessage：${status?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}"
+        ).joinToString("\n")
+
+        binding.tvStatusMapSummary.text = listOf(
+            "mapId：${currentMapState.map?.mapId ?: "--"}",
+            "mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+            "blockId：${currentPose?.blockId ?: "--"}",
+            "cellId：${currentPose?.cellId ?: "--"}",
+            "heading：${currentPose?.let { ProtocolDisplayText.mapHeading(it.headingCode, it.heading) } ?: "--"}"
+        ).joinToString("\n")
+
+        binding.tvStatusHeartbeatSummary.text =
+            "APP 最近收到心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
+    }
+
+    private fun compactId(value: String): String =
+        if (value.length <= 18) value else "${value.take(8)}…${value.takeLast(6)}"
 
     /**
      * 状态详情只展示真实数据源：
@@ -595,7 +672,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindCommandRows(items: List<StructuredLogEntity>) {
         binding.commandHistoryTable.submitRows(
-            items.take(4).map {
+            items.take(3).map {
                 val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(it.timestampMillis))
                 val params = runCatching {
                     JSONObject(it.detailJson.orEmpty()).optString("params").ifBlank { "--" }
