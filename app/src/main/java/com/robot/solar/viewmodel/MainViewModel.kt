@@ -11,16 +11,25 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.ManualSpeedPreferences
+import com.robot.solar.data.session.SessionManager
 import com.robot.solar.entity.LogCategory
 import com.robot.solar.entity.LogSeverity
 import com.robot.solar.entity.LogSource
+import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.entity.StructuredLogDraft
+import com.robot.solar.map.MapRepository
+import com.robot.solar.map.MapRepositoryState
+import com.robot.solar.map.MapSyncManager
+import com.robot.solar.map.MapSyncResult
+import com.robot.solar.network.http.ApiClient
 import com.robot.solar.network.mqtt.CloudCommMqttManager
 import com.robot.solar.network.mqtt.CmdAckMessage
+import com.robot.solar.network.mqtt.CommandPublishResult
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageCommandParams
 import com.robot.solar.network.mqtt.CoverageTaskSelection
+import com.robot.solar.network.mqtt.DeviceTopicIdentity
 import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.MissionState
 import com.robot.solar.network.mqtt.PoseMessage
@@ -33,18 +42,40 @@ import com.robot.solar.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel internal constructor(
+    application: Application,
+    private val mqtt: MainMqttGateway,
+    private val deviceIdentityProvider: MainDeviceIdentityProvider,
+    private val mapRepository: MainMapRepository,
+    recentCommandLogsFlow: Flow<List<StructuredLogEntity>>,
+    private val manualSpeedStore: MainManualSpeedStore,
+    private val mapSyncLauncher: (((suspend () -> Unit) -> Unit))? = null
+) : AndroidViewModel(application) {
 
-    private val mqtt = CloudCommMqttManager.getInstance(application)
-    private val deviceRepository = DeviceRepository.getInstance(application)
-    private val logRepository = LogRepository.getInstance(application)
-    private val manualSpeedPreferences = ManualSpeedPreferences(application)
-    private val manualSpeedDeviceId = deviceRepository.currentMqttIdentity().deviceId
+    constructor(application: Application) : this(
+        application = application,
+        mqtt = CloudMqttGateway(CloudCommMqttManager.getInstance(application)),
+        deviceIdentityProvider = DeviceRepositoryIdentityProvider(DeviceRepository.getInstance(application)),
+        mapRepository = MainMapRepositoryAdapter(
+            MapRepository(
+                MapSyncManager(
+                    cacheDir = application.cacheDir,
+                    apiService = ApiClient.getService(SessionManager.getInstance(application))
+                )
+            )
+        ),
+        recentCommandLogsFlow = LogRepository.getInstance(application).observeRecentCommands(),
+        manualSpeedStore = PreferencesManualSpeedStore(ManualSpeedPreferences(application))
+    )
+
+    private val manualSpeedDeviceId = deviceIdentityProvider.currentMqttIdentity().deviceId
     @Volatile
-    private var manualSpeedSnapshot = manualSpeedPreferences.load(manualSpeedDeviceId)
+    private var manualSpeedSnapshot = manualSpeedStore.load(manualSpeedDeviceId)
 
     val mqttConnected: LiveData<Boolean> = mqtt.mqttConnected
     val deviceOnline: LiveData<Boolean?> = mqtt.deviceOnline
@@ -53,10 +84,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val missionState: LiveData<MissionState> = mqtt.missionState
     val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
     val mapState: LiveData<MapUiState> = mqtt.mapState
+    val httpMapV2State: LiveData<MapRepositoryState> = mapRepository.state.asLiveData()
     val pose: LiveData<PoseMessage?> = mqtt.pose
     private val _manualSpeedSettings = MutableLiveData(manualSpeedSnapshot)
     val manualSpeedSettings: LiveData<ManualSpeedSettings> = _manualSpeedSettings
-    val recentCommandLogs = logRepository.observeRecentCommands().asLiveData()
+    val recentCommandLogs = recentCommandLogsFlow.asLiveData()
 
     private val _commandState = MutableLiveData(CommandUiState(null, null, CommandStatus.IDLE))
     val commandState: LiveData<CommandUiState> = _commandState
@@ -109,11 +141,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     val deviceDisplayName: String?
-        get() = deviceRepository.currentDeviceName()
+        get() = deviceIdentityProvider.currentDeviceName()
     val deviceId: String?
-        get() = deviceRepository.currentDeviceId()
+        get() = deviceIdentityProvider.currentDeviceId()
     val productType: String?
-        get() = deviceRepository.currentProductType()
+        get() = deviceIdentityProvider.currentProductType()
 
     private var lastCommandUptime: Long = 0L
     private val pendingCommands = linkedMapOf<String, PendingCommand>()
@@ -187,8 +219,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onScreenReady() {
-        val identity = deviceRepository.currentMqttIdentity()
-        mqtt.start(identity.deviceId, identity.productType)
+        MainViewModelMapStartup.onScreenReady(
+            deviceIdentityProvider = deviceIdentityProvider,
+            mqtt = mqtt,
+            mapRepository = mapRepository,
+            mapSyncLauncher = mapSyncLauncher ?: { block ->
+                viewModelScope.launch(Dispatchers.IO) { block() }
+                Unit
+            }
+        )
     }
 
     fun startRemote(direction: ManualDirection) {
@@ -350,7 +389,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val normalized = ManualSpeedPolicy.normalize(settings)
         if (normalized == manualSpeedSnapshot) return
         manualSpeedSnapshot = normalized
-        manualSpeedPreferences.save(manualSpeedDeviceId, normalized)
+        manualSpeedStore.save(manualSpeedDeviceId, normalized)
         _manualSpeedSettings.value = normalized
         if (remoteSessionStarted) {
             LogUtils.remote(
@@ -909,3 +948,108 @@ data class ControlAvailability(
     val canRemote: Boolean = false,
     val canRetry: Boolean = false
 )
+
+internal interface MainMqttGateway {
+    val mqttConnected: LiveData<Boolean>
+    val deviceOnline: LiveData<Boolean?>
+    val batteryPercent: LiveData<Int?>
+    val status: LiveData<StatusMessage?>
+    val missionState: LiveData<MissionState>
+    val lastHeartbeatAt: LiveData<Long?>
+    val mapState: LiveData<MapUiState>
+    val pose: LiveData<PoseMessage?>
+    val lastCmdAck: LiveData<CmdAckMessage?>
+
+    fun start(deviceId: String, productType: String)
+    fun publishRemote(linearSpeedCms: Double, angularRadps: Double): Boolean
+    fun prepareCommand(action: String, params: Any = emptyMap<String, Any?>()): PreparedCommand?
+    fun publishCmd(command: PreparedCommand): CommandPublishResult
+    fun shutdown()
+    fun retryMapDownload()
+}
+
+private class CloudMqttGateway(
+    private val mqtt: CloudCommMqttManager
+) : MainMqttGateway {
+    override val mqttConnected: LiveData<Boolean> = mqtt.mqttConnected
+    override val deviceOnline: LiveData<Boolean?> = mqtt.deviceOnline
+    override val batteryPercent: LiveData<Int?> = mqtt.batteryPercent
+    override val status: LiveData<StatusMessage?> = mqtt.status
+    override val missionState: LiveData<MissionState> = mqtt.missionState
+    override val lastHeartbeatAt: LiveData<Long?> = mqtt.lastHeartbeatAt
+    override val mapState: LiveData<MapUiState> = mqtt.mapState
+    override val pose: LiveData<PoseMessage?> = mqtt.pose
+    override val lastCmdAck: LiveData<CmdAckMessage?> = mqtt.lastCmdAck
+
+    override fun start(deviceId: String, productType: String) = mqtt.start(deviceId, productType)
+    override fun publishRemote(linearSpeedCms: Double, angularRadps: Double): Boolean =
+        mqtt.publishRemote(linearSpeedCms, angularRadps)
+
+    override fun prepareCommand(action: String, params: Any): PreparedCommand? =
+        mqtt.prepareCommand(action, params)
+
+    override fun publishCmd(command: PreparedCommand): CommandPublishResult = mqtt.publishCmd(command)
+    override fun shutdown() = mqtt.shutdown()
+    override fun retryMapDownload() = mqtt.retryMapDownload()
+}
+
+internal interface MainDeviceIdentityProvider {
+    fun currentDeviceName(): String?
+    fun currentDeviceId(): String?
+    fun currentProductType(): String?
+    fun currentMqttIdentity(): DeviceTopicIdentity
+}
+
+private class DeviceRepositoryIdentityProvider(
+    private val repository: DeviceRepository
+) : MainDeviceIdentityProvider {
+    override fun currentDeviceName(): String? = repository.currentDeviceName()
+    override fun currentDeviceId(): String? = repository.currentDeviceId()
+    override fun currentProductType(): String? = repository.currentProductType()
+    override fun currentMqttIdentity(): DeviceTopicIdentity = repository.currentMqttIdentity()
+}
+
+internal interface MainMapRepository {
+    val state: StateFlow<MapRepositoryState>
+    suspend fun syncCurrentMap(productType: String, deviceId: String, force: Boolean = false): MapSyncResult
+}
+
+private class MainMapRepositoryAdapter(
+    private val repository: MapRepository
+) : MainMapRepository {
+    override val state: StateFlow<MapRepositoryState> = repository.state
+    override suspend fun syncCurrentMap(productType: String, deviceId: String, force: Boolean): MapSyncResult =
+        repository.syncCurrentMap(productType, deviceId, force)
+}
+
+internal interface MainManualSpeedStore {
+    fun load(deviceId: String): ManualSpeedSettings
+    fun save(deviceId: String, settings: ManualSpeedSettings)
+}
+
+private class PreferencesManualSpeedStore(
+    private val preferences: ManualSpeedPreferences
+) : MainManualSpeedStore {
+    override fun load(deviceId: String): ManualSpeedSettings = preferences.load(deviceId)
+    override fun save(deviceId: String, settings: ManualSpeedSettings) = preferences.save(deviceId, settings)
+}
+
+internal object MainViewModelMapStartup {
+    fun onScreenReady(
+        deviceIdentityProvider: MainDeviceIdentityProvider,
+        mqtt: MainMqttGateway,
+        mapRepository: MainMapRepository,
+        mapSyncLauncher: (suspend () -> Unit) -> Unit
+    ) {
+        val identity = deviceIdentityProvider.currentMqttIdentity()
+        mqtt.start(identity.deviceId, identity.productType)
+        mapSyncLauncher {
+            runCatching {
+                mapRepository.syncCurrentMap(
+                    productType = identity.productType,
+                    deviceId = identity.deviceId
+                )
+            }
+        }
+    }
+}

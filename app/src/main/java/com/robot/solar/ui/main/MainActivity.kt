@@ -18,6 +18,7 @@ import com.robot.solar.databinding.ActivityMainBinding
 import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.map.MapPosition
+import com.robot.solar.map.MapRepositoryState
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
@@ -25,6 +26,7 @@ import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageStart
 import com.robot.solar.network.mqtt.CoverageTaskSelection
 import com.robot.solar.network.mqtt.MapLoadStatus
+import com.robot.solar.network.mqtt.MapMessage
 import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
@@ -53,6 +55,8 @@ class MainActivity : AppCompatActivity() {
     private var currentAvailability = ControlAvailability()
     private val mapParser = PvMapParser()
     private var currentMapState = MapUiState()
+    private var latestMqttMapState = MapUiState()
+    private var latestHttpMapV2State = MapRepositoryState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
     private val pendingAckDialogs = ArrayDeque<CmdAckMessage>()
@@ -130,7 +134,14 @@ class MainActivity : AppCompatActivity() {
         viewModel.status.observe(this) { bindStatus(it) }
         viewModel.missionState.observe(this) { bindStatus(viewModel.status.value) }
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
-        viewModel.mapState.observe(this) { bindMap(it) }
+        viewModel.mapState.observe(this) {
+            latestMqttMapState = it
+            bindSelectedMap()
+        }
+        viewModel.httpMapV2State.observe(this) {
+            latestHttpMapV2State = it
+            bindSelectedMap()
+        }
         viewModel.pose.observe(this) { bindPose(it) }
         viewModel.manualSpeedSettings.observe(this) {
             binding.manualSpeedControl.setSettings(it)
@@ -527,6 +538,10 @@ class MainActivity : AppCompatActivity() {
         "APP最近收到心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
     ).joinToString("\n")
 
+    private fun bindSelectedMap() {
+        bindMap(MainMapDisplayPolicy.select(latestHttpMapV2State, latestMqttMapState))
+    }
+
     private fun bindMap(mapState: MapUiState) {
         currentMapState = mapState
         val stateText = when (mapState.status) {
@@ -770,4 +785,31 @@ private enum class Page {
     MAP,
     REMOTE,
     STATUS
+}
+
+internal object MainMapDisplayPolicy {
+    fun select(httpState: MapRepositoryState, mqttState: MapUiState): MapUiState {
+        val result = httpState.currentResult
+        val pvMap = result?.pvMap ?: return mqttState
+        val current = result.current
+        val activeMap = current.activeMap
+        return MapUiState(
+            status = MapLoadStatus.READY,
+            message = "HTTP Map V2 地图已加载",
+            map = MapMessage(
+                version = null,
+                deviceId = current.deviceId,
+                productType = current.productType,
+                timestamp = current.lastReportedAt,
+                mapId = activeMap.mapId,
+                mapName = activeMap.mapName,
+                mapVersion = activeMap.mapVersion,
+                mapJsonUrl = activeMap.contentUrl,
+                fileSizeBytes = activeMap.fileSizeBytes,
+                checksum = activeMap.checksum
+            ),
+            cachePath = result.cacheFile.absolutePath,
+            pvMap = pvMap
+        )
+    }
 }
