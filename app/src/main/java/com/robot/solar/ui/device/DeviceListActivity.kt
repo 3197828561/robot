@@ -11,6 +11,7 @@ import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.robot.solar.data.session.SessionManager
@@ -22,6 +23,7 @@ import com.robot.solar.ui.main.MainActivity
 import com.robot.solar.ui.common.ProtocolDisplayText
 import com.robot.solar.utils.LogUtils
 import com.robot.solar.viewmodel.DeviceListViewModel
+import kotlinx.coroutines.launch
 
 class DeviceListActivity : AppCompatActivity() {
 
@@ -82,12 +84,22 @@ class DeviceListActivity : AppCompatActivity() {
 
     private fun logoutToLogin(action: String) {
         LogUtils.login(action)
-        authRepository.logout()
-        val intent = Intent(this, LoginActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+
+        lifecycleScope.launch {
+            authRepository.logout()
+
+            val intent = Intent(
+                this@DeviceListActivity,
+                LoginActivity::class.java
+            ).apply {
+                flags =
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TASK
+            }
+
+            startActivity(intent)
+            finish()
         }
-        startActivity(intent)
-        finish()
     }
 
     private class DeviceAdapter(

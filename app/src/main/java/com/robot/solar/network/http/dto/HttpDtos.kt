@@ -11,6 +11,10 @@ data class RefreshRequest(
     @SerializedName("refresh_token") val refreshToken: String
 )
 
+data class LogoutResponse(
+    val status: String
+)
+
 data class TokenResponse(
     @SerializedName("access_token") val accessToken: String,
     @SerializedName("refresh_token") val refreshToken: String,
