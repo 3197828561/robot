@@ -2,6 +2,7 @@ package com.robot.solar.network.http
 
 import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.SessionManager
+import com.robot.solar.network.http.dto.CurrentMapResponse
 import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.network.http.dto.FirmwareDto
 import com.robot.solar.network.http.dto.FirmwareUpgradeRequest
@@ -9,12 +10,14 @@ import com.robot.solar.network.http.dto.FirmwareUpgradeResponse
 import com.robot.solar.network.http.dto.JobDto
 import com.robot.solar.network.http.dto.LoginRequest
 import com.robot.solar.network.http.dto.LogoutResponse
+import com.robot.solar.network.http.dto.MapMetadataDto
 import com.robot.solar.network.http.dto.RefreshRequest
 import com.robot.solar.network.http.dto.TokenResponse
 import com.robot.solar.network.http.dto.WifiConfigDto
 import com.robot.solar.network.http.dto.WifiConfigUpdate
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.ResponseBody
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.Authenticator
 import okhttp3.Response
@@ -62,6 +65,28 @@ interface ApiService {
         @Path("device_id") deviceId: String,
         @Body body: WifiConfigUpdate
     ): WifiConfigDto
+
+    @GET("devices/{product_type}/{device_id}/maps/current")
+    suspend fun getCurrentMap(
+        @Path("product_type") productType: String,
+        @Path("device_id") deviceId: String
+    ): CurrentMapResponse
+
+    @GET("devices/{product_type}/{device_id}/maps/{map_id}/versions/{map_version}")
+    suspend fun getMapMetadata(
+        @Path("product_type") productType: String,
+        @Path("device_id") deviceId: String,
+        @Path("map_id") mapId: Long,
+        @Path("map_version") mapVersion: Long
+    ): MapMetadataDto
+
+    @GET("devices/{product_type}/{device_id}/maps/{map_id}/versions/{map_version}/content")
+    suspend fun getMapContent(
+        @Path("product_type") productType: String,
+        @Path("device_id") deviceId: String,
+        @Path("map_id") mapId: Long,
+        @Path("map_version") mapVersion: Long
+    ): ResponseBody
 }
 
 private interface AuthRefreshService {
