@@ -68,3 +68,33 @@ data class WifiConfigUpdate(
     val ssid: String,
     val password: String
 )
+
+data class CurrentMapResponse(
+    val productType: String,
+    val deviceId: String,
+    val activeRevision: Long,
+    val activeMap: ActiveMapDto,
+    val activatedAt: String,
+    val lastReportedAt: String
+)
+
+data class ActiveMapDto(
+    val mapId: Long,
+    val mapVersion: Long,
+    val mapName: String?,
+    val checksum: String,
+    val fileSizeBytes: Long,
+    val contentUrl: String
+)
+
+data class MapMetadataDto(
+    val productType: String,
+    val deviceId: String,
+    val mapId: Long,
+    val mapVersion: Long,
+    val mapName: String?,
+    val checksum: String,
+    val fileSizeBytes: Long,
+    val status: String,
+    val contentUrl: String
+)

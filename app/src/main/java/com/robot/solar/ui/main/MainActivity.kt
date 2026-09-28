@@ -18,14 +18,15 @@ import com.robot.solar.databinding.ActivityMainBinding
 import com.robot.solar.databinding.DialogCoverageTaskBinding
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.map.MapPosition
+import com.robot.solar.map.MapRepositoryState
+import com.robot.solar.map.MapSyncSource
+import com.robot.solar.map.PvMap
 import com.robot.solar.map.PvMapParser
 import com.robot.solar.network.mqtt.CmdAckMessage
 import com.robot.solar.network.mqtt.CommandStatus
 import com.robot.solar.network.mqtt.CommandUiState
 import com.robot.solar.network.mqtt.CoverageStart
 import com.robot.solar.network.mqtt.CoverageTaskSelection
-import com.robot.solar.network.mqtt.MapLoadStatus
-import com.robot.solar.network.mqtt.MapUiState
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.ui.common.ProtocolDisplayText
@@ -52,7 +53,8 @@ class MainActivity : AppCompatActivity() {
     private val timeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     private var currentAvailability = ControlAvailability()
     private val mapParser = PvMapParser()
-    private var currentMapState = MapUiState()
+    private var currentMapState = MainDisplayedMapState()
+    private var latestHttpMapV2State = MapRepositoryState()
     private var currentPose: PoseMessage? = null
     private val poseTrail = ArrayDeque<Pair<Long, MapPosition>>()
     private val pendingAckDialogs = ArrayDeque<CmdAckMessage>()
@@ -130,7 +132,10 @@ class MainActivity : AppCompatActivity() {
         viewModel.status.observe(this) { bindStatus(it) }
         viewModel.missionState.observe(this) { bindStatus(viewModel.status.value) }
         viewModel.batteryPercent.observe(this) { binding.batteryIndicator.setBatteryPercent(it) }
-        viewModel.mapState.observe(this) { bindMap(it) }
+        viewModel.httpMapV2State.observe(this) {
+            latestHttpMapV2State = it
+            bindSelectedMap()
+        }
         viewModel.pose.observe(this) { bindPose(it) }
         viewModel.manualSpeedSettings.observe(this) {
             binding.manualSpeedControl.setSettings(it)
@@ -185,7 +190,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnEnterManualMode.setOnClickListener { viewModel.enterRemoteMode() }
         binding.btnReturnAutoMode.setOnClickListener { viewModel.exitRemoteMode() }
         binding.btnRetryCommand.setOnClickListener { viewModel.retryLastCommand() }
-        binding.btnReloadMap.setOnClickListener { viewModel.retryMapDownload() }
+        binding.btnReloadMap.setOnClickListener { viewModel.onScreenReady() }
         binding.btnCenterRobot.setOnClickListener {
             if (!binding.mapPreviewView.centerRobot()) {
                 binding.mapPreviewView.resetViewport()
@@ -394,6 +399,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindStatusSummary(status: StatusMessage?) {
+        val telemetry = onlineTelemetry(status)
         binding.tvStatusConnectionSummary.text = listOf(
             "MQTT：${if (viewModel.mqttConnected.value == true) "已连接" else "未连接"}",
             "机器人：${when (viewModel.deviceOnline.value) {
@@ -408,7 +414,11 @@ class MainActivity : AppCompatActivity() {
             "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}",
             "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}",
             "设备状态：${status?.let { ProtocolDisplayText.deviceStatus(this, it.deviceStatus) } ?: "--"}",
-            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}"
+            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}",
+            "GPS：${gpsSummary(telemetry)}",
+            "RK3588：${formatTelemetry(telemetry?.rk3588CpuTemperatureCelsius, 1, "°C")}",
+            "总电流：${formatTelemetry(telemetry?.totalCurrentAmpere, 2, "A")}",
+            "板面倾角估算：${formatTelemetry(telemetry?.panelTiltDeg, 1, "°")}"
         ).joinToString("\n")
 
         binding.tvStatusMissionSummary.text = listOf(
@@ -427,8 +437,8 @@ class MainActivity : AppCompatActivity() {
         ).joinToString("\n")
 
         binding.tvStatusMapSummary.text = listOf(
-            "mapId：${currentMapState.map?.mapId ?: "--"}",
-            "mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+            "mapId：${currentMapState.mapId ?: "--"}",
+            "mapVersion：${currentMapState.mapVersion ?: "--"}",
             "blockId：${currentPose?.blockId ?: "--"}",
             "cellId：${currentPose?.cellId ?: "--"}",
             "heading：${currentPose?.let { ProtocolDisplayText.mapHeading(it.headingCode, it.heading) } ?: "--"}"
@@ -445,10 +455,13 @@ class MainActivity : AppCompatActivity() {
      * 状态详情只展示真实数据源：
      * - 设备基础信息来自设备列表 HTTP API；
      * - 机器人、任务字段来自 MQTT status；
-     * - 地图与定位来自 MQTT map/pose（地图允许使用同一消息落盘的缓存）；
+     * - 地图来自鉴权 HTTP Map V2，定位来自 MQTT pose；
      * - APP 信息来自 BuildConfig，心跳时间为 APP 实际接收时间。
      */
-    private fun buildStatusDetails(status: StatusMessage?): String = listOf(
+    private fun buildStatusDetails(status: StatusMessage?): String {
+        val telemetry = onlineTelemetry(status)
+        val gpsCoordinates = validGpsCoordinates(telemetry)
+        return listOf(
         "【设备列表 API】",
         "设备名称 display_name：${viewModel.deviceDisplayName ?: "--"}",
         "设备编号 device_id：${viewModel.deviceId ?: "--"}",
@@ -512,9 +525,23 @@ class MainActivity : AppCompatActivity() {
         "错误来源 errorSource：${status?.errorSource?.takeIf { it.isNotBlank() } ?: "--"}",
         "错误信息 errorMessage：${status?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}",
         "",
-        "【MQTT map（允许本地缓存）/ pose】",
-        "地图编号 mapId：${currentMapState.map?.mapId ?: "--"}",
-        "地图版本 mapVersion：${currentMapState.map?.mapVersion ?: "--"}",
+        "【MQTT status · V6 设备遥测】",
+        "遥测状态：${if (viewModel.deviceOnline.value == true) "实时" else "离线/陈旧，已隐藏"}",
+        "GPS状态 gpsStatus：${gpsStatusText(telemetry?.gpsStatus)}",
+        "纬度 latitudeDeg：${gpsCoordinates?.first?.let { String.format(Locale.getDefault(), "%.6f", it) } ?: "--"}",
+        "经度 longitudeDeg：${gpsCoordinates?.second?.let { String.format(Locale.getDefault(), "%.6f", it) } ?: "--"}",
+        "机身内部温度 internalTemperatureCelsius：${formatTelemetry(telemetry?.internalTemperatureCelsius, 1, "°C")}",
+        "H7 CPU温度 h7CpuTemperatureCelsius：${formatTelemetry(telemetry?.h7CpuTemperatureCelsius, 1, "°C")}",
+        "RK3588 CPU温度 rk3588CpuTemperatureCelsius：${formatTelemetry(telemetry?.rk3588CpuTemperatureCelsius, 1, "°C")}",
+        "整机总电流 totalCurrentAmpere：${formatTelemetry(telemetry?.totalCurrentAmpere, 2, "A")}",
+        "横滚角 rollDeg：${formatTelemetry(telemetry?.rollDeg, 1, "°")}",
+        "俯仰角 pitchDeg：${formatTelemetry(telemetry?.pitchDeg, 1, "°")}",
+        "航向角 yawDeg：${formatTelemetry(telemetry?.yawDeg, 1, "°")}",
+        "板面倾角估算 panelTiltDeg：${formatTelemetry(telemetry?.panelTiltDeg, 1, "°")}",
+        "",
+        "【HTTP Map V2 / MQTT pose】",
+        "地图编号 mapId：${currentMapState.mapId ?: "--"}",
+        "地图版本 mapVersion：${currentMapState.mapVersion ?: "--"}",
         "当前区域 blockId：${currentPose?.blockId ?: "--"}",
         "当前单元 cellId：${currentPose?.cellId ?: "--"}",
         "机器人朝向 heading：${
@@ -525,26 +552,61 @@ class MainActivity : AppCompatActivity() {
         "",
         "【MQTT heartbeat】",
         "APP最近收到心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
-    ).joinToString("\n")
+        ).joinToString("\n")
+    }
 
-    private fun bindMap(mapState: MapUiState) {
-        currentMapState = mapState
-        val stateText = when (mapState.status) {
-            MapLoadStatus.NO_MAP -> "暂无地图"
-            MapLoadStatus.DOWNLOADING -> "正在加载"
-            MapLoadStatus.READY -> "地图已加载"
-            MapLoadStatus.FAILED -> "地图加载失败"
+    private fun onlineTelemetry(status: StatusMessage?): StatusMessage? =
+        status?.takeIf { viewModel.deviceOnline.value == true }
+
+    private fun validGpsCoordinates(status: StatusMessage?): Pair<Double, Double>? {
+        if (status?.gpsStatus !in 1..3) return null
+        val latitude = status?.latitudeDeg?.takeIf { it in -90.0..90.0 } ?: return null
+        val longitude = status.longitudeDeg?.takeIf { it in -180.0..180.0 } ?: return null
+        return latitude to longitude
+    }
+
+    private fun gpsSummary(status: StatusMessage?): String {
+        val coordinates = validGpsCoordinates(status)
+        return if (coordinates != null) {
+            "${gpsStatusText(status?.gpsStatus)} · " +
+                String.format(Locale.getDefault(), "%.6f, %.6f", coordinates.first, coordinates.second)
+        } else if (status?.gpsStatus in 1..3) {
+            "定位数据不可用"
+        } else {
+            gpsStatusText(status?.gpsStatus)
         }
+    }
+
+    private fun gpsStatusText(value: Int?): String = when (value) {
+        null -> "GPS状态未知"
+        0 -> "无定位"
+        1 -> "2D定位"
+        2 -> "3D定位"
+        3 -> "RTK固定解"
+        else -> "未知定位状态"
+    }
+
+    private fun formatTelemetry(value: Double?, decimals: Int, unit: String): String =
+        value?.takeIf { it.isFinite() }?.let {
+            String.format(Locale.getDefault(), "%.${decimals}f %s", it, unit)
+        } ?: "--"
+
+    private fun bindSelectedMap() {
+        bindMap(MainMapDisplayPolicy.select(latestHttpMapV2State))
+    }
+
+    private fun bindMap(mapState: MainDisplayedMapState) {
+        currentMapState = mapState
+        val stateText = mapState.message
         binding.tvMapState.text = stateText
         binding.tvMapPageState.text = stateText
-        val map = mapState.map
-        val meta = if (map == null) {
+        val meta = if (mapState.mapId == null) {
             "--"
         } else {
-            "地图：${map.mapName ?: "--"}  编号：${map.mapId ?: "--"}  版本：${map.mapVersion ?: "--"}"
+            "地图：${mapState.mapName ?: "--"}  编号：${mapState.mapId}  版本：${mapState.mapVersion ?: "--"}"
         }
         binding.tvMapMeta.text = meta
-        val readyMap = mapState.pvMap.takeIf { mapState.status == MapLoadStatus.READY }
+        val readyMap = mapState.pvMap
         binding.tvMapPageMeta.text = readyMap?.let {
             "■ 光伏板区域（${it.cells.size}）"
         } ?: "■ 光伏板区域"
@@ -566,6 +628,23 @@ class MainActivity : AppCompatActivity() {
             binding.mapPageView.setRobot(null, emptyList())
             return
         }
+        val mapIdentityMismatch = pose?.mapId != null && pose.mapVersion != null &&
+            (pose.mapId != map.mapId || pose.mapVersion != map.version)
+        if (mapIdentityMismatch) {
+            poseTrail.clear()
+            binding.mapPreviewView.setRobot(null, emptyList())
+            binding.mapPageView.setRobot(null, emptyList())
+            binding.tvMapState.text = "地图版本已变化，正在同步"
+            binding.tvMapPageState.text = "地图版本已变化，正在同步"
+            binding.tvMapState.visibility = View.VISIBLE
+            binding.tvMapPageState.visibility = View.VISIBLE
+            bindStatus(viewModel.status.value)
+            return
+        }
+        binding.tvMapState.text = currentMapState.message
+        binding.tvMapPageState.text = currentMapState.message
+        binding.tvMapState.visibility = View.GONE
+        binding.tvMapPageState.visibility = View.GONE
         val position = pose?.let { mapParser.resolvePose(map, it) }
         val now = System.currentTimeMillis()
         if (position != null) poseTrail.addLast(now to position)
@@ -771,3 +850,33 @@ private enum class Page {
     REMOTE,
     STATUS
 }
+
+internal object MainMapDisplayPolicy {
+    fun select(httpState: MapRepositoryState): MainDisplayedMapState {
+        val result = httpState.currentResult
+        val pvMap = result?.pvMap ?: return MainDisplayedMapState()
+        val current = result.current
+        val activeMap = current.activeMap
+        return MainDisplayedMapState(
+            message = when (result.source) {
+                MapSyncSource.DOWNLOAD -> "HTTP Map V2 地图已更新"
+                MapSyncSource.CACHE -> "HTTP Map V2 地图已从缓存加载"
+                MapSyncSource.OFFLINE_CACHE -> "云端不可用，正在使用已校验离线地图"
+            },
+            mapId = activeMap.mapId,
+            mapVersion = activeMap.mapVersion,
+            mapName = activeMap.mapName,
+            cachePath = result.cacheFile.absolutePath,
+            pvMap = pvMap
+        )
+    }
+}
+
+internal data class MainDisplayedMapState(
+    val message: String = "暂无地图",
+    val mapId: Long? = null,
+    val mapVersion: Long? = null,
+    val mapName: String? = null,
+    val cachePath: String? = null,
+    val pvMap: PvMap? = null
+)

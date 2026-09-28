@@ -2,22 +2,23 @@
 
 这是光伏清洁机器人 Android App 仓库，包含 Android 客户端、HTTP/MQTT 接口说明、地图规划 JSON 示例，以及本地 MQTT 机器人模拟器。
 
-当前分支主要面向第二版 App 需求：
+当前功能基线按需求文档 V1–V6 演进，冲突部分以最新专项文档为准：
 
 - 登录、设备列表、作业记录、固件升级、WiFi 配置通过 HTTP 后端提供；
-- 机器人在线状态、运行状态、命令回执、地图通知、机器人姿态通过 MQTT 提供；
+- 机器人在线状态、运行状态、命令回执、V6 遥测和机器人姿态通过 MQTT 提供；
+- 地图按 V5 Map V2 通过鉴权 HTTP `current/version/content` 接口同步，不订阅 MQTT `map`；
 - 地图展示按 `docs/requirements/map_planner/config/example_map_complex.json` 的格式解析和绘制；
-- 没有新 `map` 通知时，App 会优先显示本地缓存的最新地图；没有缓存时再加载内置示例地图，方便手机直接安装 APK 后验证地图页。
+- 云端不可用时，App 只恢复此前经过 checksum、大小和地图身份校验的离线缓存。
 
 ## Project Layout
 
 ```text
 app/                                  Android App
 docs/                                 需求、接口、部署和联调文档
-docs/requirements/                    第一版/第二版 App 需求文档
+docs/requirements/                    V1–V6 App 需求与协议演进文档
 docs/requirements/map_planner/        机器人地图 JSON 生成逻辑和示例地图
-tools/robot-sim/                      四个单一职责的 MQTT 测试脚本
-tools/robot-sim/README.md             在线、监听、手动模式和地图通知说明
+tools/robot-sim/                      MQTT 在线、命令监听和手动模式测试脚本
+tools/robot-sim/README.md             在线、监听和手动模式说明
 local.properties.example              本地配置示例
 ```
 
@@ -113,12 +114,6 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-command-listener.
 powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 ```
 
-让App下载当前测试地图：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
-```
-
 更多说明见 [tools/robot-sim/README.md](tools/robot-sim/README.md)。
 
 ## Validate
@@ -145,8 +140,10 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
 
 | Document | Purpose |
 | --- | --- |
-| [docs/requirements/第二版APP需求分析文档 .md](docs/requirements/第二版APP需求分析文档%20.md) | 第二版 App 需求和接口设计 |
-| [docs/requirements/第一版APP需求分析文档.md](docs/requirements/第一版APP需求分析文档.md) | 第一版 App 需求 |
+| [docs/requirements/v3_第三版APP接口.md](docs/requirements/v3_第三版APP接口.md) | 未被后续专项文档覆盖的基础 App 接口 |
+| [docs/requirements/v4.3_app_mission_command_migration.md](docs/requirements/v4.3_app_mission_command_migration.md) | 当前任务与根任务状态契约 |
+| [docs/requirements/v5_map_backend_app_implementation_guide.md](docs/requirements/v5_map_backend_app_implementation_guide.md) | 当前 Map V2 契约 |
+| [docs/requirements/v6_app_device_telemetry.md](docs/requirements/v6_app_device_telemetry.md) | 当前设备遥测契约 |
 | [docs/interfaces-summary.md](docs/interfaces-summary.md) | HTTP / MQTT / App / Robot 接口总览 |
 | [docs/desktop-mqtt-test.md](docs/desktop-mqtt-test.md) | 桌面 MQTT 联调步骤 |
 | [docs/server-http-only-deploy.md](docs/server-http-only-deploy.md) | 已有 MQTT 服务时部署 HTTP API |
@@ -159,7 +156,7 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
 2. 确认 `local.properties` 中的 `api.base.url`、`mqtt.host`、账号、设备 ID 正确。
 3. 启动 App，登录后进入设备列表。
 4. 选择与模拟器一致的设备，例如 `crawler/crawler_00000001`。
-5. 按测试目标启动在线、监听、手动模式或地图通知脚本。
+5. 按测试目标启动在线、监听或手动模式脚本；地图使用 Cloud Map V2 测试数据。
 6. 在App中检查首页在线状态、实际下发命令或手动控制闭环。
 7. 作业记录、固件升级、WiFi 配置页面通过 HTTP 后端数据验证。
 
@@ -167,5 +164,5 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-map-notice.ps1
 
 - MQTT topic 格式是 `device/{productType}/{deviceId}/{topicType}`。
 - App 会校验 MQTT payload 中的 `version`、`productType`、`deviceId`。
-- 地图页优先显示本地缓存的最新地图；没有缓存时可用内置示例 JSON 展示。接入真实 `mapJsonUrl` 后，App 会下载并缓存远程地图，下载失败时继续保留当前可用地图。
+- 地图页通过鉴权 HTTP Map V2 获取当前地图；网络失败时仅使用已完整校验的设备隔离缓存。
 - 不要提交真实服务器地址、账号或密码。

@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonParser
 import com.robot.solar.network.mqtt.CommandPayloadFactory
 import com.robot.solar.network.mqtt.StatusMessage
+import com.robot.solar.network.mqtt.StatusMessageParser
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.CoverageCommandParams
 import com.robot.solar.network.mqtt.CoverageStart
@@ -127,6 +128,79 @@ class MqttModelsParseTest {
         assertEquals(true, status.errorRetryable)
         assertEquals("mission_planner", status.errorSource)
         assertEquals("temporary planning failure", status.errorMessage)
+    }
+
+    @Test
+    fun parseStatus_readsV6TelemetryAndPreservesSignedCurrent() {
+        val parsed = StatusMessageParser.parse(
+            """
+            {
+              "version": "1.0",
+              "deviceId": "crawler_00000001",
+              "productType": "crawler",
+              "workStatus": "running",
+              "latitudeDeg": 31.2304,
+              "longitudeDeg": 121.4737,
+              "gpsStatus": 3,
+              "internalTemperatureCelsius": null,
+              "h7CpuTemperatureCelsius": null,
+              "rk3588CpuTemperatureCelsius": 58.25,
+              "totalCurrentAmpere": -7.2,
+              "rollDeg": 3.0,
+              "pitchDeg": 4.0,
+              "yawDeg": 125.0,
+              "panelTiltDeg": 4.998
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(emptyList<String>(), parsed.invalidTelemetryFields)
+        assertEquals("running", parsed.message.workStatus)
+        assertEquals(31.2304, parsed.message.latitudeDeg!!, 0.000001)
+        assertEquals(3, parsed.message.gpsStatus)
+        assertEquals(null, parsed.message.h7CpuTemperatureCelsius)
+        assertEquals(58.25, parsed.message.rk3588CpuTemperatureCelsius!!, 0.001)
+        assertEquals(-7.2, parsed.message.totalCurrentAmpere!!, 0.001)
+        assertEquals(4.998, parsed.message.panelTiltDeg!!, 0.001)
+    }
+
+    @Test
+    fun parseStatus_invalidV6FieldDoesNotDiscardOtherStatusFields() {
+        val parsed = StatusMessageParser.parse(
+            """
+            {
+              "version": "1.0",
+              "deviceId": "crawler_00000001",
+              "productType": "crawler",
+              "runState": "running",
+              "latitudeDeg": "not-a-number",
+              "longitudeDeg": 121.4737,
+              "gpsStatus": 2.5,
+              "rk3588CpuTemperatureCelsius": null,
+              "unknownFutureField": 42
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("running", parsed.message.runState)
+        assertEquals(null, parsed.message.latitudeDeg)
+        assertEquals(121.4737, parsed.message.longitudeDeg!!, 0.000001)
+        assertEquals(null, parsed.message.gpsStatus)
+        assertEquals(
+            listOf("gpsStatus", "latitudeDeg"),
+            parsed.invalidTelemetryFields
+        )
+    }
+
+    @Test
+    fun parseStatus_missingOrNullV6FieldsRemainNullWithoutWarnings() {
+        val parsed = StatusMessageParser.parse(
+            """{"version":"1.0","deviceId":"crawler_1","productType":"crawler","totalCurrentAmpere":null}"""
+        )
+
+        assertEquals(emptyList<String>(), parsed.invalidTelemetryFields)
+        assertEquals(null, parsed.message.latitudeDeg)
+        assertEquals(null, parsed.message.totalCurrentAmpere)
     }
 
     @Test
