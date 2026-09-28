@@ -1,5 +1,6 @@
 package com.robot.solar.map
 
+import com.google.gson.Gson
 import com.robot.solar.network.http.ApiService
 import com.robot.solar.network.http.dto.CurrentMapResponse
 import okhttp3.ResponseBody
@@ -15,10 +16,15 @@ class MapSyncManager(
     private val cacheDir: File,
     private val apiService: ApiService,
     private val parser: PvMapParser = PvMapParser(),
-    private val maxMapBytes: Int = MAX_MAP_BYTES
+    private val maxMapBytes: Int = MAX_MAP_BYTES,
+    private val gson: Gson = Gson()
 ) {
     suspend fun sync(productType: String, deviceId: String, force: Boolean = false): MapSyncResult {
-        val current = apiService.getCurrentMap(productType, deviceId)
+        val current = try {
+            apiService.getCurrentMap(productType, deviceId)
+        } catch (error: IOException) {
+            return loadOfflineCache(productType, deviceId, error)
+        }
         val activeMap = current.activeMap
         validateChecksumFormat(activeMap.checksum)
         validateExpectedSize(activeMap.fileSizeBytes)
@@ -35,6 +41,7 @@ class MapSyncManager(
                 )
             }.getOrNull()
             if (cached != null) {
+                writeCurrentManifest(productType, deviceId, current)
                 return MapSyncResult(
                     current = current,
                     pvMap = cached,
@@ -44,12 +51,17 @@ class MapSyncManager(
             }
         }
 
-        val bytes = apiService.getMapContent(
-            productType = productType,
-            deviceId = deviceId,
-            mapId = activeMap.mapId,
-            mapVersion = activeMap.mapVersion
-        ).use(::readBoundedBytes)
+        val bytes = try {
+            apiService.getMapContent(
+                productType = productType,
+                deviceId = deviceId,
+                mapId = activeMap.mapId,
+                mapVersion = activeMap.mapVersion
+            ).use(::readBoundedBytes)
+        } catch (error: IOException) {
+            return loadValidatedCache(current, productType, deviceId, MapSyncSource.OFFLINE_CACHE)
+                ?: throw error
+        }
         validateBytes(
             bytes = bytes,
             expectedSizeBytes = activeMap.fileSizeBytes,
@@ -57,6 +69,7 @@ class MapSyncManager(
         )
         val pvMap = parseAndValidateMap(bytes, activeMap.mapId, activeMap.mapVersion)
         writeCacheAtomically(cacheFile, bytes)
+        writeCurrentManifest(productType, deviceId, current)
         return MapSyncResult(
             current = current,
             pvMap = pvMap,
@@ -68,6 +81,48 @@ class MapSyncManager(
     fun cacheFileFor(productType: String, deviceId: String, mapId: Long, mapVersion: Long): File =
         File(File(File(cacheDir, MAP_CACHE_DIR), productType), deviceId)
             .resolve("${mapId}_${mapVersion}.json")
+
+    private fun loadOfflineCache(
+        productType: String,
+        deviceId: String,
+        networkError: IOException
+    ): MapSyncResult {
+        val manifest = currentManifestFor(productType, deviceId)
+        if (!manifest.isFile) throw networkError
+        val current = runCatching {
+            gson.fromJson(manifest.readText(Charsets.UTF_8), CurrentMapResponse::class.java)
+        }.getOrNull() ?: throw networkError
+        if (current.productType != productType || current.deviceId != deviceId) throw networkError
+        return loadValidatedCache(current, productType, deviceId, MapSyncSource.OFFLINE_CACHE)
+            ?: throw networkError
+    }
+
+    private fun loadValidatedCache(
+        current: CurrentMapResponse,
+        productType: String,
+        deviceId: String,
+        source: MapSyncSource
+    ): MapSyncResult? {
+        val active = current.activeMap
+        val file = cacheFileFor(productType, deviceId, active.mapId, active.mapVersion)
+        val map = runCatching {
+            validateChecksumFormat(active.checksum)
+            validateExpectedSize(active.fileSizeBytes)
+            readValidatedCache(file, active.mapId, active.mapVersion, active.checksum, active.fileSizeBytes)
+        }.getOrNull() ?: return null
+        return MapSyncResult(current, map, file, source)
+    }
+
+    private fun currentManifestFor(productType: String, deviceId: String): File =
+        File(File(File(cacheDir, MAP_CACHE_DIR), productType), deviceId)
+            .resolve(CURRENT_MANIFEST)
+
+    private fun writeCurrentManifest(productType: String, deviceId: String, current: CurrentMapResponse) {
+        writeCacheAtomically(
+            currentManifestFor(productType, deviceId),
+            gson.toJson(current).toByteArray(Charsets.UTF_8)
+        )
+    }
 
     private fun readValidatedCache(
         file: File,
@@ -177,6 +232,7 @@ class MapSyncManager(
     companion object {
         const val MAX_MAP_BYTES = 20 * 1024 * 1024
         private const val MAP_CACHE_DIR = "maps"
+        private const val CURRENT_MANIFEST = ".current-map-v2.json"
         private const val CHECKSUM_PREFIX = "sha256:"
         private val SHA256_HEX = Regex("^[0-9a-fA-F]{64}$")
     }
@@ -191,7 +247,8 @@ data class MapSyncResult(
 
 enum class MapSyncSource {
     CACHE,
-    DOWNLOAD
+    DOWNLOAD,
+    OFFLINE_CACHE
 }
 
 class MapSyncException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)

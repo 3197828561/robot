@@ -8,9 +8,11 @@
 
 此目录保存机器人端或产品侧交付的原始文档。原则上保留原文，不在原文件中混写 APP 实现结论。
 
-- `v3_app_mission_command_migration.md`：机器人端 MissionCommand 升级接口。
-- `map_upload_backend_api.md`：机器人地图自动上传、服务器保存和 APP 下载接口。
-- `第一版APP需求分析文档.md`、`第二版APP需求分析文档 .md`：APP 需求基线。
+- `v3_第三版APP接口.md`：未被后续专项文档覆盖的基础接口。
+- `v4.3_app_mission_command_migration.md`：当前任务与根任务状态契约。
+- `v5_map_backend_app_implementation_guide.md`：当前 Map V2 契约。
+- `v6_app_device_telemetry.md`：当前设备遥测契约。
+- V1、V2、V4.1、V4.2：保留为需求演进历史，不作为冲突项的最新验收依据。
 - `map_planner/`：地图规划模块资料、消息、服务、示例和源码参考。
 
 ### 2. `docs/changes/`：本项目实现与交接说明
@@ -27,7 +29,6 @@
 
 当前说明：
 
-- `2026-08-01-map-upload-backend-implementation.md`
 - `2026-08-01-app-mission-command-migration.md`
 - `2026-08-01-login-bcrypt-compatibility-fix.md`
 

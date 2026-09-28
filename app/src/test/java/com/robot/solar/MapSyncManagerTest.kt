@@ -26,6 +26,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 import java.security.MessageDigest
 
@@ -110,6 +111,23 @@ class MapSyncManagerTest {
         assertTrue(first.absolutePath != second.absolutePath)
     }
 
+    @Test
+    fun sync_restoresValidatedCacheWhenCurrentRequestIsOffline() = runBlocking {
+        val cacheDir = temporaryDirectory()
+        val bytes = validMapBytes(mapId = 2, version = 1)
+        val current = currentFor(bytes, mapId = 2, version = 1)
+        MapSyncManager(cacheDir, FakeApiService(current, bytes))
+            .sync("crawler", "crawler_1")
+
+        val offline = MapSyncManager(
+            cacheDir,
+            FakeApiService(current, null, currentFailure = IOException("offline"))
+        ).sync("crawler", "crawler_1")
+
+        assertEquals(MapSyncSource.OFFLINE_CACHE, offline.source)
+        assertEquals(2L, offline.pvMap.mapId)
+    }
+
     private fun temporaryDirectory(): File =
         Files.createTempDirectory("map-sync-test").toFile().apply { deleteOnExit() }
 
@@ -176,7 +194,8 @@ class MapSyncManagerTest {
 
 private class FakeApiService(
     private val current: CurrentMapResponse,
-    private val contentBytes: ByteArray?
+    private val contentBytes: ByteArray?,
+    private val currentFailure: IOException? = null
 ) : ApiService {
     var contentCalls: Int = 0
         private set
@@ -190,7 +209,8 @@ private class FakeApiService(
     override suspend fun triggerFirmwareUpgrade(body: FirmwareUpgradeRequest): FirmwareUpgradeResponse = error("not used")
     override suspend fun getWifi(deviceId: String): WifiConfigDto = error("not used")
     override suspend fun updateWifi(deviceId: String, body: WifiConfigUpdate): WifiConfigDto = error("not used")
-    override suspend fun getCurrentMap(productType: String, deviceId: String): CurrentMapResponse = current
+    override suspend fun getCurrentMap(productType: String, deviceId: String): CurrentMapResponse =
+        currentFailure?.let { throw it } ?: current
     override suspend fun getMapMetadata(productType: String, deviceId: String, mapId: Long, mapVersion: Long): MapMetadataDto = error("not used")
     override suspend fun getMapContent(productType: String, deviceId: String, mapId: Long, mapVersion: Long): ResponseBody {
         contentCalls += 1

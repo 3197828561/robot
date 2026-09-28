@@ -1,9 +1,11 @@
 package com.robot.solar.network.mqtt
 
 import com.google.gson.Gson
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.google.gson.annotations.SerializedName
 
-/** 第二版 App 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
+/** 当前 App 与 Robot 通信协议：device/{productType}/{deviceId}/{topicType}。 */
 data class HeartbeatMessage(
     val version: String?,
     val deviceId: String?,
@@ -49,8 +51,90 @@ data class StatusMessage(
     @SerializedName("errorCode") val missionErrorCode: Int?,
     val errorRetryable: Boolean?,
     val errorSource: String?,
-    val errorMessage: String?
+    val errorMessage: String?,
+    val latitudeDeg: Double? = null,
+    val longitudeDeg: Double? = null,
+    val gpsStatus: Int? = null,
+    val internalTemperatureCelsius: Double? = null,
+    val h7CpuTemperatureCelsius: Double? = null,
+    val rk3588CpuTemperatureCelsius: Double? = null,
+    val totalCurrentAmpere: Double? = null,
+    val rollDeg: Double? = null,
+    val panelTiltDeg: Double? = null
 )
+
+data class ParsedStatusMessage(
+    val message: StatusMessage,
+    val invalidTelemetryFields: List<String>
+)
+
+/** V6 遥测容错解析：单个非法传感字段不得丢弃整条 status。 */
+object StatusMessageParser {
+    private val gson = Gson()
+    private val telemetryNumberFields = listOf(
+        "latitudeDeg",
+        "longitudeDeg",
+        "internalTemperatureCelsius",
+        "h7CpuTemperatureCelsius",
+        "rk3588CpuTemperatureCelsius",
+        "totalCurrentAmpere",
+        "rollDeg",
+        "pitchDeg",
+        "yawDeg",
+        "panelTiltDeg"
+    )
+    private val telemetryFields = telemetryNumberFields + "gpsStatus"
+
+    fun parse(payload: String): ParsedStatusMessage {
+        val root = JsonParser.parseString(payload).asJsonObject
+        val baseJson = root.deepCopy()
+        telemetryFields.forEach(baseJson::remove)
+        val base = gson.fromJson(baseJson, StatusMessage::class.java)
+        val invalid = mutableListOf<String>()
+
+        fun number(name: String): Double? {
+            val value = finiteNumber(root, name)
+            if (root.hasNonNull(name) && value == null) invalid += name
+            return value
+        }
+
+        val gpsStatus = integer(root, "gpsStatus").also {
+            if (root.hasNonNull("gpsStatus") && it == null) invalid += "gpsStatus"
+        }
+
+        return ParsedStatusMessage(
+            message = base.copy(
+                latitudeDeg = number("latitudeDeg"),
+                longitudeDeg = number("longitudeDeg"),
+                gpsStatus = gpsStatus,
+                internalTemperatureCelsius = number("internalTemperatureCelsius"),
+                h7CpuTemperatureCelsius = number("h7CpuTemperatureCelsius"),
+                rk3588CpuTemperatureCelsius = number("rk3588CpuTemperatureCelsius"),
+                totalCurrentAmpere = number("totalCurrentAmpere"),
+                rollDeg = number("rollDeg"),
+                pitchDeg = number("pitchDeg"),
+                yawDeg = number("yawDeg"),
+                panelTiltDeg = number("panelTiltDeg")
+            ),
+            invalidTelemetryFields = invalid.distinct()
+        )
+    }
+
+    private fun finiteNumber(root: JsonObject, name: String): Double? {
+        val element = root.get(name) ?: return null
+        if (element.isJsonNull || !element.isJsonPrimitive || !element.asJsonPrimitive.isNumber) return null
+        return runCatching { element.asDouble }.getOrNull()?.takeIf { it.isFinite() }
+    }
+
+    private fun integer(root: JsonObject, name: String): Int? {
+        val number = finiteNumber(root, name) ?: return null
+        if (number % 1.0 != 0.0 || number < Int.MIN_VALUE || number > Int.MAX_VALUE) return null
+        return number.toInt()
+    }
+
+    private fun JsonObject.hasNonNull(name: String): Boolean =
+        has(name) && get(name)?.isJsonNull == false
+}
 
 data class CmdAckMessage(
     val version: String?,

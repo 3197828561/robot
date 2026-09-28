@@ -154,6 +154,9 @@ class MainViewModel internal constructor(
     private var pendingExitToAuto = false
     private var manualModeConfirmed = false
     private var remoteJob: Job? = null
+    private var poseMapSyncJob: Job? = null
+    private var lastPoseMapSyncKey: String? = null
+    private var lastPoseMapSyncUptime: Long = 0L
     private var currentDirection: ManualDirection? = null
     @Volatile
     private var remoteSessionStarted = false
@@ -209,11 +212,15 @@ class MainViewModel internal constructor(
             }
         }
     }
+    private val poseObserver = Observer<PoseMessage?> { pose ->
+        syncMapForMismatchedPose(pose)
+    }
 
     init {
         mqtt.lastCmdAck.observeForever(cmdAckObserver)
         mqtt.mqttConnected.observeForever(mqttConnectedObserver)
         mqtt.missionState.observeForever(missionStateObserver)
+        mqtt.pose.observeForever(poseObserver)
     }
 
     fun onScreenReady() {
@@ -226,6 +233,26 @@ class MainViewModel internal constructor(
                 Unit
             }
         )
+    }
+
+    private fun syncMapForMismatchedPose(pose: PoseMessage?) {
+        val mapId = pose?.mapId ?: return
+        val mapVersion = pose.mapVersion ?: return
+        val currentMap = httpMapV2State.value?.currentResult?.pvMap
+        if (currentMap?.mapId == mapId && currentMap.version == mapVersion) return
+        if (poseMapSyncJob?.isActive == true) return
+
+        val identity = deviceIdentityProvider.currentMqttIdentity()
+        val key = "${identity.productType}/${identity.deviceId}/$mapId/$mapVersion"
+        val now = SystemClock.uptimeMillis()
+        if (lastPoseMapSyncKey == key && now - lastPoseMapSyncUptime < POSE_MAP_SYNC_THROTTLE_MS) return
+        lastPoseMapSyncKey = key
+        lastPoseMapSyncUptime = now
+        poseMapSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                mapRepository.syncCurrentMap(identity.productType, identity.deviceId)
+            }
+        }
     }
 
     fun startRemote(direction: ManualDirection) {
@@ -796,7 +823,7 @@ class MainViewModel internal constructor(
             summary = "$label：${message ?: result}",
             result = result,
             paramsSummary = paramsSummary,
-            missionId = missionState.value?.missionId,
+            missionId = missionState.value?.controlMissionId,
             severity = severity,
             detailJson = detail
         )
@@ -821,6 +848,8 @@ class MainViewModel internal constructor(
         mqtt.lastCmdAck.removeObserver(cmdAckObserver)
         mqtt.mqttConnected.removeObserver(mqttConnectedObserver)
         mqtt.missionState.removeObserver(missionStateObserver)
+        mqtt.pose.removeObserver(poseObserver)
+        poseMapSyncJob?.cancel()
         super.onCleared()
     }
 
@@ -898,6 +927,7 @@ class MainViewModel internal constructor(
     companion object {
         private const val UINT32_MAX = 4_294_967_295L
         private const val MAX_ISSUED_COMMAND_HISTORY = 50
+        private const val POSE_MAP_SYNC_THROTTLE_MS = 5_000L
         private const val DEBUG_MISSING_MISSION_ID = "debug-no-active-mission"
         private val SUPPORTED_COMMANDS = setOf(
             "start",

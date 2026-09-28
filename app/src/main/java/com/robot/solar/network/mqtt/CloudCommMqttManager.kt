@@ -37,7 +37,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence
 import org.json.JSONObject
 
-/** 第二版 App 与 Robot MQTT 通信管理：device/{productType}/{deviceId}/{topicType}。 */
+/** 当前 App 与 Robot MQTT 通信管理：device/{productType}/{deviceId}/{topicType}。 */
 class CloudCommMqttManager private constructor(private val appContext: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -303,7 +303,10 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
             topicCmdAck(productType, deviceId),
             topicPose(productType, deviceId)
         )
-        mqttClient.subscribe(topics, IntArray(topics.size) { COMMAND_QOS })
+        mqttClient.subscribe(
+            topics,
+            intArrayOf(TELEMETRY_QOS, TELEMETRY_QOS, COMMAND_QOS, TELEMETRY_QOS)
+        )
         LogUtils.connection(
             eventType = "mqtt_subscribed",
             summary = "已订阅设备上行主题",
@@ -334,7 +337,16 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
                     recordOnlineTransition(msg.online == true)
                 }
                 topic.endsWith("/status") -> {
-                    val msg = gson.fromJson(payload, StatusMessage::class.java)
+                    val parsed = StatusMessageParser.parse(payload)
+                    val msg = parsed.message
+                    if (parsed.invalidTelemetryFields.isNotEmpty()) {
+                        protocolWarning(
+                            eventType = "telemetry_fields_invalid",
+                            summary = "设备遥测包含非法字段，已按无数据处理",
+                            topic = topic,
+                            detail = parsed.invalidTelemetryFields.joinToString(",")
+                        )
+                    }
                     _status.postValue(msg)
                     _missionState.postValue(
                         MissionState(
@@ -642,6 +654,7 @@ class CloudCommMqttManager private constructor(private val appContext: Context) 
     companion object {
         private const val PROTOCOL_VERSION = "1.0"
         private const val COMMAND_QOS = 1
+        private const val TELEMETRY_QOS = 0
         private const val REMOTE_QOS = 0
         private const val HEARTBEAT_TIMEOUT_MS = 3000L
         private val COMMAND_TIMESTAMP_FORMAT: DateTimeFormatter =
