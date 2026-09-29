@@ -23,7 +23,9 @@ function Convert-SecureToPlainText([Security.SecureString]$Value) {
 
 function Read-Property([string]$Name) {
     foreach ($line in Get-Content -LiteralPath $propertiesPath -Encoding UTF8) {
-        if ($line -match "^$([regex]::Escape($Name))=(.+)$") { return $matches[1].Trim().Trim('"') }
+        if ($line -match "^$([regex]::Escape($Name))=(.+)$") {
+            return $matches[1].Trim().Trim('"').Replace('\:', ':').Replace('\\', '\')
+        }
     }
     return $null
 }
