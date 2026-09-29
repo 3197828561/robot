@@ -11,3 +11,10 @@
 - Robot simulator scripts resolve Mosquitto from `mqtt.client.dir` automatically.
 - Never print or commit `mqtt.password`, `mqtt.robot.password`, or other values from `local.properties`.
 - Project-local binaries belong under the ignored `.local-tools/` directory.
+
+## Token-efficient builds and releases
+
+- Start each long-running local build or GitHub Actions workflow only once.
+- Do not poll, watch, sleep-loop, or repeatedly query build/release status.
+- After starting a remote workflow, report its run URL/ID and let the user monitor it; continue verification only after the user reports completion.
+- If a foreground command returns a background session, do not repeatedly fetch logs unless the user explicitly asks for a status check.
