@@ -7,7 +7,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
-import java.io.File
 
 class PvMapParserTest {
     private val parser = PvMapParser()
@@ -56,12 +55,10 @@ class PvMapParserTest {
 
     @Test
     fun parseRepositoryComplexExample_readsCompleteMap() {
-        val file = sequenceOf(
-            File("docs/requirements/map_planner/config/example_map_complex.json"),
-            File("../docs/requirements/map_planner/config/example_map_complex.json")
-        ).firstOrNull(File::isFile) ?: error("找不到 map_planner 示例地图")
-
-        val map = parser.parse(file)
+        val json = checkNotNull(javaClass.getResource("/maps/example_map_complex.json")) {
+            "找不到测试地图资源"
+        }.readText()
+        val map = parser.parse(json)
 
         assertEquals(2L, map.mapId)
         assertEquals(5, map.blocks.size)

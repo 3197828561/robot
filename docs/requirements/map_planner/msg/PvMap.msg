@@ -1,9 +1,0 @@
-std_msgs/Header header
-uint32 map_id
-uint32 version
-string unit
-uint32 inner_rows
-uint32 inner_cols
-Block[] blocks
-Cell[] cells
-Bridge[] bridges
