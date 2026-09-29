@@ -73,9 +73,11 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "DEBUG_CONTROL_BYPASS", "true")
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
         }
         release {
             isMinifyEnabled = false
+            manifestPlaceholders["usesCleartextTraffic"] = "false"
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("distribution")
             }

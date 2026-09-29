@@ -16,7 +16,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.SolarRobotDemo"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         tools:targetApi="35">
 
         <provider
