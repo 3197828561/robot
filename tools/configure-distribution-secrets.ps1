@@ -12,7 +12,8 @@ $signingSecretsPath = Join-Path $signingDirectory "release-secrets.clixml"
 $encryptedDirectory = Join-Path $repoRoot ".local-tools\secrets"
 $encryptedPath = Join-Path $encryptedDirectory "distribution-secrets.clixml"
 $projectGh = Join-Path $repoRoot ".local-tools\gh\bin\gh.exe"
-$gh = if (Test-Path $projectGh) { $projectGh } else { (Get-Command gh -ErrorAction SilentlyContinue).Source }
+$installedGh = Join-Path $env:ProgramFiles "GitHub CLI\gh.exe"
+$gh = if (Test-Path $projectGh) { $projectGh } elseif (Test-Path $installedGh) { $installedGh } else { (Get-Command gh -ErrorAction SilentlyContinue).Source }
 
 function Read-Properties([string]$Path) {
     $result = @{}
