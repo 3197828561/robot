@@ -75,8 +75,16 @@ $buildTools = Get-ChildItem -LiteralPath (Join-Path $sdkDirectory "build-tools")
 $apkSigner = Join-Path $buildTools.FullName "apksigner.bat"
 if (!(Test-Path $apkSigner)) { throw "未找到 apksigner。" }
 
-$certificateOutput = & $apkSigner verify --verbose --print-certs $apkPath 2>&1
-if ($LASTEXITCODE -ne 0) { throw "服务器下载的 APK 签名验证失败。" }
+$javaHome = Read-Property "java.home"
+if (!$javaHome) { throw "local.properties 缺少 java.home。" }
+$previousJavaHome = $env:JAVA_HOME
+$env:JAVA_HOME = $javaHome
+try {
+    $certificateOutput = & $apkSigner verify --verbose --print-certs $apkPath 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "服务器下载的 APK 签名验证失败。" }
+} finally {
+    $env:JAVA_HOME = $previousJavaHome
+}
 $apkDigestLine = $certificateOutput | Where-Object { $_ -match 'certificate SHA-256 digest:\s*([0-9a-fA-F]+)' } | Select-Object -First 1
 if (!$apkDigestLine) { throw "无法读取 APK 签名证书摘要。" }
 $null = $apkDigestLine -match 'certificate SHA-256 digest:\s*([0-9a-fA-F]+)'
@@ -85,7 +93,6 @@ $apkDigest = $matches[1].ToLowerInvariant()
 $signing = Import-Clixml -LiteralPath $signingPath
 $storePassword = Convert-SecureToPlainText $signing.StorePassword
 $certificatePath = Join-Path $verificationDirectory "release-cert.der"
-$javaHome = Read-Property "java.home"
 $keytool = Join-Path $javaHome "bin\keytool.exe"
 $env:ROBOT_STORE_PASSWORD = $storePassword
 try {
