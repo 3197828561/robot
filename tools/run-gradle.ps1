@@ -39,5 +39,39 @@ if (!$javaHome -or !(Test-Path -LiteralPath (Join-Path $javaHome "bin\java.exe")
 
 $env:JAVA_HOME = $javaHome
 $gradleWrapper = Join-Path $RepoRoot "gradlew.bat"
-& $gradleWrapper @GradleArgs
-exit $LASTEXITCODE
+$signingDirectory = Join-Path $RepoRoot ".local-tools\signing"
+$keystorePath = Join-Path $signingDirectory "robot-release.jks"
+$secretsPath = Join-Path $signingDirectory "release-secrets.clixml"
+$distributionSecretsPath = Join-Path $RepoRoot ".local-tools\secrets\distribution-secrets.clixml"
+$savedEnvironment = @{}
+
+function Convert-SecureToPlainText([Security.SecureString]$Value) {
+    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Value)
+    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+}
+
+try {
+    if ((Test-Path -LiteralPath $keystorePath) -and (Test-Path -LiteralPath $secretsPath)) {
+        $saved = Import-Clixml -LiteralPath $secretsPath
+        foreach ($name in "ANDROID_KEYSTORE_FILE", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD") {
+            $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+        }
+        $env:ANDROID_KEYSTORE_FILE = $keystorePath
+        $env:ANDROID_KEYSTORE_PASSWORD = Convert-SecureToPlainText $saved.StorePassword
+        $env:ANDROID_KEY_ALIAS = $saved.Alias
+        $env:ANDROID_KEY_PASSWORD = Convert-SecureToPlainText $saved.KeyPassword
+    }
+    if (Test-Path -LiteralPath $distributionSecretsPath) {
+        $distribution = Import-Clixml -LiteralPath $distributionSecretsPath
+        $savedEnvironment["MQTT_PASSWORD"] = [Environment]::GetEnvironmentVariable("MQTT_PASSWORD", "Process")
+        $env:MQTT_PASSWORD = Convert-SecureToPlainText $distribution.MqttPassword
+    }
+    & $gradleWrapper @GradleArgs
+    $gradleExitCode = $LASTEXITCODE
+} finally {
+    foreach ($name in $savedEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], "Process")
+    }
+}
+exit $gradleExitCode

@@ -23,11 +23,9 @@ val appVersionName = prop("app.version.name", "1.2.0")
 val releaseKeystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
     ?: localProperties.getProperty("android.keystore.file")
 val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
-    ?: localProperties.getProperty("android.keystore.password")
 val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
     ?: localProperties.getProperty("android.key.alias")
 val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
-    ?: localProperties.getProperty("android.key.password")
 val releaseSigningReady = listOf(
     releaseKeystoreFile,
     releaseKeystorePassword,

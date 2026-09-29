@@ -11,11 +11,9 @@ emulator.path=C:/path/to/Android/Sdk/emulator/emulator.exe
 api.base.url=http://47.103.157.213/api
 app.update.channel=test
 
-# App 发布签名（只写入不提交的 local.properties；签名文件放在 .local-tools/signing）
+# App 发布签名的非敏感配置；密码由 create-release-keystore.ps1 使用 DPAPI 加密保存
 android.keystore.file=.local-tools/signing/robot-release.jks
-android.keystore.password=填入签名库密码
 android.key.alias=robot-app
-android.key.password=填入签名密钥密码
 
 # MQTT Broker（与 cloud_comm、EMQX 一致）
 mqtt.host=47.103.157.213
