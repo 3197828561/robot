@@ -34,7 +34,9 @@ function Convert-SecureToPlainText([Security.SecureString]$Value) {
 
 function Set-RepositorySecret([string]$Name, [string]$Value) {
     if ([string]::IsNullOrWhiteSpace($Value)) { throw "GitHub Secret $Name 为空。" }
-    $Value | & $gh secret set $Name --repo $Repository --body -
+    # gh reads the secret from standard input when --body is omitted. Passing
+    # "--body -" stores a literal dash instead of reading stdin.
+    $Value | & $gh secret set $Name --repo $Repository
     if ($LASTEXITCODE -ne 0) { throw "GitHub Secret $Name 写入失败。" }
 }
 

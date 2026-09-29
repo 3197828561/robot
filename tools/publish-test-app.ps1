@@ -38,15 +38,20 @@ foreach ($path in $gh, $signingPath, $keystorePath, $distributionPath) {
 if ($LASTEXITCODE -ne 0) { throw "GitHub CLI 尚未登录。" }
 
 $startedAt = [DateTimeOffset]::UtcNow.AddSeconds(-10)
-& $gh workflow run publish-app.yml --repo $Repository --ref $Branch -f channel=test
+$dispatchOutput = @(& $gh workflow run publish-app.yml --repo $Repository --ref $Branch -f channel=test)
 if ($LASTEXITCODE -ne 0) { throw "触发 GitHub Actions 失败。" }
 
 $run = $null
-for ($attempt = 0; $attempt -lt 20 -and !$run; $attempt++) {
-    Start-Sleep -Seconds 3
-    $runs = & $gh run list --repo $Repository --workflow publish-app.yml --branch $Branch `
-        --event workflow_dispatch --limit 5 --json databaseId,createdAt,status,conclusion | ConvertFrom-Json
-    $run = $runs | Where-Object { [DateTimeOffset]::Parse($_.createdAt) -ge $startedAt } | Select-Object -First 1
+$dispatchText = $dispatchOutput -join "`n"
+if ($dispatchText -match '/actions/runs/(?<id>\d+)') {
+    $run = [pscustomobject]@{ databaseId = [long]$matches.id }
+} else {
+    for ($attempt = 0; $attempt -lt 20 -and !$run; $attempt++) {
+        Start-Sleep -Seconds 3
+        $runs = & $gh run list --repo $Repository --workflow publish-app.yml --branch $Branch `
+            --event workflow_dispatch --limit 5 --json databaseId,createdAt,status,conclusion | ConvertFrom-Json
+        $run = $runs | Where-Object { [DateTimeOffset]::Parse($_.createdAt) -ge $startedAt } | Select-Object -First 1
+    }
 }
 if (!$run) { throw "未找到刚触发的 GitHub Actions 运行。" }
 
