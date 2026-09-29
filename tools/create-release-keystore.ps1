@@ -68,7 +68,7 @@ try {
         $env:ROBOT_STORE_PASSWORD = $storePassword
         $env:ROBOT_KEY_PASSWORD = $keyPassword
         try {
-            & $keytool -genkeypair -v -keystore $keystorePath -alias $Alias `
+            & $keytool -genkeypair -v -storetype JKS -keystore $keystorePath -alias $Alias `
                 -keyalg RSA -keysize 4096 -validity 10000 `
                 -dname "CN=Solar Robot App, OU=Android, O=Robot Project, C=CN" `
                 -storepass:env ROBOT_STORE_PASSWORD -keypass:env ROBOT_KEY_PASSWORD
