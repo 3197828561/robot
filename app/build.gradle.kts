@@ -14,7 +14,22 @@ val localProperties = Properties().apply {
 }
 
 fun prop(key: String, default: String): String =
-    localProperties.getProperty(key, default).replace("\"", "\\\"")
+    (providers.gradleProperty(key).orNull
+        ?: System.getenv(key.uppercase().replace('.', '_'))
+        ?: localProperties.getProperty(key, default)).replace("\"", "\\\"")
+
+val appVersionCode = prop("app.version.code", "3").toInt()
+val appVersionName = prop("app.version.name", "1.2.0")
+val releaseKeystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
+val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("ANDROID_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+val releaseSigningReady = listOf(
+    releaseKeystoreFile,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+).all { !it.isNullOrBlank() }
 
 android {
     namespace = "com.robot.solar"
@@ -24,8 +39,8 @@ android {
         applicationId = "com.robot.solar"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.2.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -37,6 +52,18 @@ android {
         buildConfigField("String", "MQTT_DEFAULT_PRODUCT_TYPE", "\"${prop("mqtt.product_type", "crawler")}\"")
         buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "crawler_00000001")}\"")
         buildConfigField("String", "MISSION_COMMAND_API_CAPABILITY", "\"mission_command_v2\"")
+        buildConfigField("String", "APP_UPDATE_CHANNEL", "\"${prop("app.update.channel", "test")}\"")
+    }
+
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("distribution") {
+                storeFile = rootProject.file(releaseKeystoreFile!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
@@ -45,6 +72,9 @@ android {
         }
         release {
             isMinifyEnabled = false
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("distribution")
+            }
             buildConfigField("boolean", "DEBUG_CONTROL_BYPASS", "false")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

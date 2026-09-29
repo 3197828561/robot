@@ -98,3 +98,17 @@ data class MapMetadataDto(
     val status: String,
     val contentUrl: String
 )
+
+data class AppReleaseDto(
+    val channel: String,
+    val versionCode: Long,
+    val versionName: String,
+    val minSupportedVersionCode: Long,
+    val mandatory: Boolean,
+    val sha256: String,
+    val fileSizeBytes: Long,
+    val releaseNotes: String?,
+    val gitCommit: String?,
+    val publishedAt: String,
+    val contentUrl: String
+)

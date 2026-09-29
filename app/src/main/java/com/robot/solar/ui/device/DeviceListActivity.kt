@@ -21,6 +21,7 @@ import com.robot.solar.repository.AuthRepository
 import com.robot.solar.ui.login.LoginActivity
 import com.robot.solar.ui.main.MainActivity
 import com.robot.solar.ui.common.ProtocolDisplayText
+import com.robot.solar.update.AppUpdateManager
 import com.robot.solar.utils.LogUtils
 import com.robot.solar.viewmodel.DeviceListViewModel
 import kotlinx.coroutines.launch
@@ -32,6 +33,7 @@ class DeviceListActivity : AppCompatActivity() {
     private val session by lazy { SessionManager.getInstance(this) }
     private val viewModel: DeviceListViewModel by viewModels()
     private val adapter = DeviceAdapter { viewModel.selectDevice(it) }
+    private val appUpdateManager by lazy { AppUpdateManager(this) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +63,12 @@ class DeviceListActivity : AppCompatActivity() {
         }
 
         viewModel.loadDevices()
+        appUpdateManager.check()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        appUpdateManager.resumePendingInstall()
     }
 
     private fun showUserMenu() {

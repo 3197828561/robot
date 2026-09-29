@@ -5,6 +5,7 @@ import com.robot.solar.map.MapSyncManager
 import com.robot.solar.map.MapSyncSource
 import com.robot.solar.network.http.ApiService
 import com.robot.solar.network.http.dto.ActiveMapDto
+import com.robot.solar.network.http.dto.AppReleaseDto
 import com.robot.solar.network.http.dto.CurrentMapResponse
 import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.network.http.dto.FirmwareDto
@@ -216,4 +217,6 @@ private class FakeApiService(
         contentCalls += 1
         return (contentBytes ?: error("不应下载 content")).toResponseBody()
     }
+    override suspend fun getLatestAppRelease(channel: String): AppReleaseDto = error("not used")
+    override suspend fun downloadAppRelease(channel: String, versionCode: Long): ResponseBody = error("not used")
 }

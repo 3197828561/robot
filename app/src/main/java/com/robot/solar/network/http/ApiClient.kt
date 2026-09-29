@@ -3,6 +3,7 @@ package com.robot.solar.network.http
 import com.robot.solar.BuildConfig
 import com.robot.solar.data.session.SessionManager
 import com.robot.solar.network.http.dto.CurrentMapResponse
+import com.robot.solar.network.http.dto.AppReleaseDto
 import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.network.http.dto.FirmwareDto
 import com.robot.solar.network.http.dto.FirmwareUpgradeRequest
@@ -86,6 +87,17 @@ interface ApiService {
         @Path("device_id") deviceId: String,
         @Path("map_id") mapId: Long,
         @Path("map_version") mapVersion: Long
+    ): ResponseBody
+
+    @GET("app-releases/{channel}/latest")
+    suspend fun getLatestAppRelease(
+        @Path("channel") channel: String
+    ): AppReleaseDto
+
+    @GET("app-releases/{channel}/{version_code}/content")
+    suspend fun downloadAppRelease(
+        @Path("channel") channel: String,
+        @Path("version_code") versionCode: Long
     ): ResponseBody
 }
 
