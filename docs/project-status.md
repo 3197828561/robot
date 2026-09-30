@@ -6,9 +6,9 @@
 
 - 当前分支：`feature/app-update-channel`；
 - Map V2、V4.3 任务状态和 V6 遥测已集成在当前 feature；
-- GitHub Actions 测试渠道发布成功：运行 `36548607538`；
-- 已发布测试包：`versionCode=100010`、`1.3.10-test+5eab2d70`；
-- 发布包 SHA-256：`5e951f04a35d0c07c6a178d7a8767fcaf99555ab4176839c591300ab40355a7c`；
+- GitHub Actions 测试渠道发布成功：运行 `36554783677`；
+- 已发布测试包：`versionCode=100011`、`1.3.11-test+1471c285`；
+- 发布包 SHA-256：`819dd5680ffa4503eee2c260e3efe5556a2fdfca83ea3c2fe11feac196ae6c10`；
 - APK v2 签名有效，与本地固定发布证书一致。
 
 ## 已完成
@@ -17,7 +17,7 @@
 - `pose` 地图身份错配隐藏与重新同步；
 - V6 遥测可空解析、旧值清除和离线陈旧处理；
 - V4.3 根任务与内部子任务状态归属；
-- `test`/`stable` App 更新渠道、固定签名、HTTPS 下载与安装前校验；
+- `test`/`stable` App 更新渠道、固定签名、HTTPS 下载与安装前校验；测试人员入口支持无账号的直接下载；
 - JKS 和真实凭据均不进入 Git。
 
 ## 待完成

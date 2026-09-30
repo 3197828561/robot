@@ -56,7 +56,7 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 .\tools\publish-test-app.ps1
 ```
 
-测试人员下载地址：<https://47.103.157.213/downloads/app/test>。下载凭据不在 Git 中保存。
+测试人员可直接下载：<https://47.103.157.213/downloads/app/test>。测试 APK 的浏览器入口支持公开 `GET`/`HEAD`；APK 上传、App 登录和业务 API 仍需要各自凭据。
 
 ## 协作边界
 
