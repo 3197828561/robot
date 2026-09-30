@@ -7,6 +7,7 @@ import com.robot.solar.database.AppDatabase
 import com.robot.solar.entity.StructuredLogDraft
 import com.robot.solar.entity.StructuredLogEntity
 import com.robot.solar.network.http.ApiClient
+import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.network.http.dto.LoginRequest
 import com.robot.solar.network.http.dto.RefreshRequest
 import com.robot.solar.network.mqtt.DeviceTopicIdentity
@@ -144,6 +145,13 @@ class DeviceRepository private constructor(
     fun currentDeviceName(): String? = session.deviceDisplayName
     fun currentProductType(): String? = session.productType ?: session.deviceId?.let(::inferProductType)
     fun hasDevice(): Boolean = session.hasSelectedDevice()
+
+    /** 设备列表必须使用 Robot 真实 MQTT 身份，不能把未知旧记录映射到另一台设备。 */
+    fun isSupportedDevice(device: DeviceDto): Boolean {
+        val productType = device.productType?.trim().orEmpty()
+        val prefix = device.deviceId.substringBefore("_", missingDelimiterValue = "")
+        return productType in SUPPORTED_PRODUCT_TYPES && prefix == productType
+    }
 
     fun currentMqttIdentity(): DeviceTopicIdentity {
         val selectedDeviceId = session.deviceId.orEmpty()

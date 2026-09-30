@@ -31,7 +31,10 @@ import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.ui.common.ProtocolDisplayText
 import com.robot.solar.ui.device.DeviceListActivity
+import com.robot.solar.ui.firmware.FirmwareActivity
+import com.robot.solar.ui.job.JobListActivity
 import com.robot.solar.ui.log.LogActivity
+import com.robot.solar.ui.wifi.WifiActivity
 import com.robot.solar.viewmodel.ControlAvailability
 import com.robot.solar.viewmodel.MainViewModel
 import com.robot.solar.viewmodel.ManualSpeedSettings
@@ -204,6 +207,15 @@ class MainActivity : AppCompatActivity() {
         binding.btnMapLocate.setOnClickListener { centerMapOnRobot() }
         binding.btnViewLogs.setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
+        }
+        binding.btnJobs.setOnClickListener {
+            startActivity(Intent(this, JobListActivity::class.java))
+        }
+        binding.btnWifi.setOnClickListener {
+            startActivity(Intent(this, WifiActivity::class.java))
+        }
+        binding.btnFirmware.setOnClickListener {
+            startActivity(Intent(this, FirmwareActivity::class.java))
         }
         binding.btnStatusDiagnostics.setOnClickListener {
             MaterialAlertDialogBuilder(this)

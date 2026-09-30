@@ -31,7 +31,10 @@ class DeviceListViewModel(application: Application) : AndroidViewModel(applicati
         viewModelScope.launch {
             _loading.value = true
             try {
+                // 旧版/未知设备不能进入主界面，否则会回退到默认 crawler 身份，
+                // 造成设备名称、地图和 MQTT 控制对象不一致。
                 _devices.value = deviceRepository.fetchDevices()
+                    .filter(deviceRepository::isSupportedDevice)
             } catch (e: Exception) {
                 if (session.isLoggedIn()) {
                     _error.value = e.message ?: "加载设备失败"

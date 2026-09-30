@@ -61,7 +61,7 @@
         android:id="@+id/tvEmpty"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="暂无绑定设备"
+        android:text="暂无可用设备"
         android:textColor="@color/control_text_muted"
         android:textSize="16sp"
         android:visibility="gone"
