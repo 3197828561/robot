@@ -20,3 +20,10 @@
 ## 当前状态
 
 见 [project-status.md](project-status.md)。需求版本解释、Robot 交付项和三仓库联合验收记录以 `robot-integration` 为准。
+
+## App 正式化
+
+- [正式化产品需求](requirements/app-formalization-product-requirements.md)：页面、交互、安全、手机和平板验收口径；
+- [App 正式交付清单](app-delivery-checklist.md)：App、Cloud、Robot、测试人员每次需要提供的交付物。
+
+正式化文档不新增接口版本。所有通信仍以 V1–V6 当前有效定义为准。
