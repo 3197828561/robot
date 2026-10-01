@@ -49,6 +49,14 @@
                 android:layout_marginTop="5dp"
                 android:textColor="@color/control_text_muted"
                 android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tvDeviceAccess"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/control_text_muted"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <TextView

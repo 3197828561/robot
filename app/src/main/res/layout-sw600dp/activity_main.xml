@@ -58,11 +58,19 @@
             app:strokeColor="@color/control_on_dark_muted" />
     </LinearLayout>
 
-    <FrameLayout
-        android:id="@+id/pageContainer"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:layoutDirection="rtl"
+        android:orientation="horizontal">
+
+    <FrameLayout
+        android:id="@+id/pageContainer"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:layoutDirection="ltr">
 
         <LinearLayout
             android:id="@+id/sectionHome"
@@ -384,45 +392,6 @@
                     </com.google.android.material.card.MaterialCardView>
             </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnJobs"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_weight="1"
-                    android:text="作业记录"
-                    android:textSize="12sp"
-                    app:cornerRadius="8dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnWifi"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:text="Wi-Fi配置"
-                    android:textSize="12sp"
-                    app:cornerRadius="8dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnFirmware"
-                    style="?attr/materialButtonOutlinedStyle"
-                    android:layout_width="0dp"
-                    android:layout_height="44dp"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:text="固件升级"
-                    android:textSize="12sp"
-                    app:cornerRadius="8dp" />
-            </LinearLayout>
-
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
@@ -459,14 +428,6 @@
                                 android:textSize="17sp"
                                 android:textStyle="bold" />
 
-                            <com.google.android.material.button.MaterialButton
-                                android:id="@+id/btnViewLogs"
-                                style="?attr/borderlessButtonStyle"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="查看更多日志"
-                                android:textColor="@color/control_primary"
-                                android:textSize="13sp" />
                         </LinearLayout>
 
                         <HorizontalScrollView
@@ -824,6 +785,13 @@
             </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
 
+        <include
+            android:id="@+id/recordsPage"
+            layout="@layout/view_records_page"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
         <androidx.core.widget.NestedScrollView
             android:id="@+id/sectionStatus"
             android:layout_width="match_parent"
@@ -1025,6 +993,65 @@
                     android:text="查看完整诊断信息" />
 
                 <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:text="设备设置与App"
+                    android:textColor="@color/control_title"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvMaintenanceHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="维护功能需要管理员权限，并依赖Robot执行链路。"
+                    android:textColor="@color/control_text_muted"
+                    android:textSize="13sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnWifi"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:text="Wi-Fi配置" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnFirmware"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="Robot固件升级" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnAbout"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:layout_weight="1"
+                        android:text="关于与App更新" />
+                </LinearLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnAccount"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="8dp"
+                    android:text="账号与设备" />
+
+                <TextView
                     android:id="@+id/tvStatusDetails"
                     android:layout_width="1dp"
                     android:layout_height="1dp"
@@ -1035,51 +1062,63 @@
 
     <LinearLayout
         android:id="@+id/bottomNav"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
+        android:layout_width="116dp"
+        android:layout_height="match_parent"
         android:background="@color/control_bottom_bar"
         android:gravity="center"
-        android:orientation="horizontal">
+        android:layoutDirection="ltr"
+        android:orientation="vertical">
 
         <TextView
             android:id="@+id/navHome"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="⌂  首页"
+            android:text="总览"
             android:textColor="@color/control_primary"
             android:textSize="15sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/navMap"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="●  地图"
+            android:text="地图"
             android:textColor="@color/control_nav_inactive"
             android:textSize="15sp" />
 
         <TextView
             android:id="@+id/navRemote"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="◉  手动控制"
+            android:text="控制"
+            android:textColor="@color/control_nav_inactive"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/navRecords"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="记录"
             android:textColor="@color/control_nav_inactive"
             android:textSize="15sp" />
 
         <TextView
             android:id="@+id/navStatus"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
             android:layout_weight="1"
             android:gravity="center"
-            android:text="▤  状态详情"
+            android:text="更多"
             android:textColor="@color/control_nav_inactive"
             android:textSize="15sp" />
+    </LinearLayout>
     </LinearLayout>
 </LinearLayout>

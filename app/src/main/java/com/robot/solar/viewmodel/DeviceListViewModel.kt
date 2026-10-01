@@ -37,7 +37,7 @@ class DeviceListViewModel(application: Application) : AndroidViewModel(applicati
                     .filter(deviceRepository::isSupportedDevice)
             } catch (e: Exception) {
                 if (session.isLoggedIn()) {
-                    _error.value = e.message ?: "加载设备失败"
+                    _error.value = "加载设备失败，请检查网络后重试"
                 }
             } finally {
                 _loading.value = false
@@ -46,7 +46,7 @@ class DeviceListViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun selectDevice(device: DeviceDto) {
-        deviceRepository.selectDevice(device.deviceId, device.displayName, device.productType)
+        deviceRepository.selectDevice(device)
         _navigateMain.value = true
     }
 

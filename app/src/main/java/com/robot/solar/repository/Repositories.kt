@@ -135,31 +135,39 @@ class DeviceRepository private constructor(
         ApiClient.getService(session).listDevices()
     }
 
-    fun selectDevice(deviceId: String, displayName: String, productType: String?) {
-        session.deviceId = deviceId
-        session.deviceDisplayName = displayName
-        session.productType = productType?.takeIf { it.isNotBlank() } ?: inferProductType(deviceId)
+    fun selectDevice(device: DeviceDto) {
+        session.deviceId = device.deviceId
+        session.deviceDisplayName = device.displayName
+        session.productType = DeviceIdentityPolicy.effectiveProductType(device)
+        session.deviceRole = device.role
+        val permissions = device.permissions
+        session.canControlDevice = permissions?.control ?: (device.role in setOf("admin", "operator"))
+        session.canConfigureDevice = permissions?.configure ?: (device.role == "admin")
+        session.canUpgradeDevice = permissions?.upgrade ?: (device.role == "admin")
     }
 
     fun currentDeviceId(): String? = session.deviceId
     fun currentDeviceName(): String? = session.deviceDisplayName
     fun currentProductType(): String? = session.productType ?: session.deviceId?.let(::inferProductType)
     fun hasDevice(): Boolean = session.hasSelectedDevice()
+    fun canControl(): Boolean = session.canControlDevice
+    fun canConfigure(): Boolean = session.canConfigureDevice
+    fun canUpgrade(): Boolean = session.canUpgradeDevice
+    fun currentRole(): String? = session.deviceRole
 
     /** 设备列表必须使用 Robot 真实 MQTT 身份，不能把未知旧记录映射到另一台设备。 */
     fun isSupportedDevice(device: DeviceDto): Boolean {
-        val productType = device.productType?.trim().orEmpty()
-        val prefix = device.deviceId.substringBefore("_", missingDelimiterValue = "")
-        return productType in SUPPORTED_PRODUCT_TYPES && prefix == productType
+        return DeviceIdentityPolicy.isSupported(device)
     }
 
     fun currentMqttIdentity(): DeviceTopicIdentity {
-        val selectedDeviceId = session.deviceId.orEmpty()
-        val mqttDeviceId = selectedDeviceId.takeIf(::isHardwareDeviceId)
-            ?: BuildConfig.MQTT_DEFAULT_DEVICE_ID
+        val selectedDeviceId = requireNotNull(session.deviceId?.takeIf(::isHardwareDeviceId)) {
+            "未选择有效设备"
+        }
         val productType = session.productType?.takeIf { it.isNotBlank() }
-            ?: inferProductType(mqttDeviceId)
-        return DeviceTopicIdentity(productType = productType, deviceId = mqttDeviceId)
+            ?: inferProductType(selectedDeviceId)
+        require(selectedDeviceId.startsWith("${productType}_")) { "设备身份不一致" }
+        return DeviceTopicIdentity(productType = productType, deviceId = selectedDeviceId)
     }
 
     private fun inferProductType(deviceId: String): String {

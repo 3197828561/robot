@@ -16,6 +16,7 @@ import com.robot.solar.network.http.dto.JobDto
 import com.robot.solar.repository.DeviceRepository
 import com.robot.solar.repository.JobRepository
 import com.robot.solar.ui.common.ProtocolDisplayText
+import com.robot.solar.ui.common.applySystemBarPadding
 import kotlinx.coroutines.launch
 
 class JobListActivity : AppCompatActivity() {
@@ -27,6 +28,7 @@ class JobListActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityJobListBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarPadding()
 
         binding.toolbar.setNavigationOnClickListener { finish() }
         binding.rvJobs.layoutManager = LinearLayoutManager(this)

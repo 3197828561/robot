@@ -144,6 +144,12 @@ class MainViewModel internal constructor(
         get() = deviceIdentityProvider.currentDeviceId()
     val productType: String?
         get() = deviceIdentityProvider.currentProductType()
+    val canControlDevice: Boolean
+        get() = deviceIdentityProvider.canControl()
+    val canConfigureDevice: Boolean
+        get() = deviceIdentityProvider.canConfigure()
+    val canUpgradeDevice: Boolean
+        get() = deviceIdentityProvider.canUpgrade()
 
     private var lastCommandUptime: Long = 0L
     private val pendingCommands = linkedMapOf<String, PendingCommand>()
@@ -508,6 +514,10 @@ class MainViewModel internal constructor(
     fun retryLastCommand() {
         val command = lastPreparedCommand ?: return
         val label = lastCommandLabel ?: command.cmd
+        if (!deviceIdentityProvider.canControl()) {
+            rejectCommand(command.cmd, "当前账号只有查看权限")
+            return
+        }
         if (_retryAvailable.value != true) {
             rejectCommand(command.cmd, "当前没有可重试的失败命令")
             return
@@ -526,6 +536,10 @@ class MainViewModel internal constructor(
         params: Any = emptyMap<String, Any?>(),
         paramsSummary: String = "{}"
     ) {
+        if (!deviceIdentityProvider.canControl()) {
+            rejectCommand(action, "当前账号只有查看权限")
+            return
+        }
         if (!BuildConfig.DEBUG_CONTROL_BYPASS && !debounce()) {
             rejectCommand(action, "操作过于频繁，请稍后重试")
             return
@@ -879,6 +893,7 @@ class MainViewModel internal constructor(
         .toString()
 
     private fun isRemoteAllowed(connected: Boolean, online: Boolean): Boolean {
+        if (!deviceIdentityProvider.canControl()) return false
         val mission = missionState.value
         return ManualControlPolicy.isAllowed(
             connected = connected,
@@ -911,6 +926,7 @@ class MainViewModel internal constructor(
         connected: Boolean,
         online: Boolean
     ): ControlAvailability {
+        if (!deviceIdentityProvider.canControl()) return ControlAvailability()
         return MissionControlPolicy.compute(
             connected = connected,
             online = online,
@@ -1020,6 +1036,9 @@ internal interface MainDeviceIdentityProvider {
     fun currentDeviceId(): String?
     fun currentProductType(): String?
     fun currentMqttIdentity(): DeviceTopicIdentity
+    fun canControl(): Boolean = true
+    fun canConfigure(): Boolean = true
+    fun canUpgrade(): Boolean = true
 }
 
 private class DeviceRepositoryIdentityProvider(
@@ -1029,6 +1048,9 @@ private class DeviceRepositoryIdentityProvider(
     override fun currentDeviceId(): String? = repository.currentDeviceId()
     override fun currentProductType(): String? = repository.currentProductType()
     override fun currentMqttIdentity(): DeviceTopicIdentity = repository.currentMqttIdentity()
+    override fun canControl(): Boolean = repository.canControl()
+    override fun canConfigure(): Boolean = repository.canConfigure()
+    override fun canUpgrade(): Boolean = repository.canUpgrade()
 }
 
 internal interface MainMapRepository {

@@ -20,6 +20,7 @@ fun prop(key: String, default: String): String =
 
 val appVersionCode = prop("app.version.code", "3").toInt()
 val appVersionName = prop("app.version.name", "1.2.0")
+val apiBaseUrl = prop("api.base.url", "http://10.0.2.2/api")
 val releaseKeystoreFile = System.getenv("ANDROID_KEYSTORE_FILE")
     ?: localProperties.getProperty("android.keystore.file")
 val releaseKeystorePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
@@ -46,7 +47,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "API_BASE_URL", "\"${prop("api.base.url", "http://10.0.2.2/api")}\"")
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
         buildConfigField("String", "MQTT_HOST", "\"${prop("mqtt.host", "47.103.157.213")}\"")
         buildConfigField("int", "MQTT_PORT", prop("mqtt.port", "1883"))
         buildConfigField("String", "MQTT_USERNAME", "\"${prop("mqtt.username", "app_user_001")}\"")
@@ -55,6 +56,7 @@ android {
         buildConfigField("String", "MQTT_DEFAULT_DEVICE_ID", "\"${prop("mqtt.default_device_id", "crawler_00000001")}\"")
         buildConfigField("String", "MISSION_COMMAND_API_CAPABILITY", "\"mission_command_v2\"")
         buildConfigField("String", "APP_UPDATE_CHANNEL", "\"${prop("app.update.channel", "test")}\"")
+        buildConfigField("String", "BUILD_GIT_COMMIT", "\"${prop("app.git.commit", "local")}\"")
     }
 
     signingConfigs {
@@ -96,6 +98,16 @@ android {
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+}
+
+tasks.configureEach {
+    if (name == "preReleaseBuild") {
+        doFirst {
+            check(apiBaseUrl.startsWith("https://")) {
+                "Release builds require an HTTPS api.base.url"
+            }
+        }
     }
 }
 

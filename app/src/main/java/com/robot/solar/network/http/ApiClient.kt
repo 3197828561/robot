@@ -169,7 +169,7 @@ object ApiClient {
             .create(AuthRefreshService::class.java)
 
         val authenticator = Authenticator { _: Route?, response: Response ->
-            if (responseCount(response) >= 2) {
+            if (AuthenticationRetryPolicy.hasRepeatedUnauthorized(response)) {
                 notifyAuthExpired(sessionManager)
                 return@Authenticator null
             }
@@ -266,13 +266,10 @@ object ApiClient {
         authExpiredHandler?.invoke()
     }
 
-    private fun responseCount(response: Response): Int {
-        var count = 1
-        var prior = response.priorResponse
-        while (prior != null) {
-            count++
-            prior = prior.priorResponse
-        }
-        return count
-    }
+}
+
+internal object AuthenticationRetryPolicy {
+    fun hasRepeatedUnauthorized(response: Response): Boolean =
+        generateSequence(response) { it.priorResponse }
+            .count { it.code == 401 } >= 2
 }

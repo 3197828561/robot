@@ -5,9 +5,12 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowInsetsControllerCompat
 import com.robot.solar.data.session.RememberedLoginStore
+import com.robot.solar.BuildConfig
 import com.robot.solar.databinding.ActivityLoginBinding
 import com.robot.solar.ui.device.DeviceListActivity
+import com.robot.solar.ui.common.applySystemBarPadding
 import com.robot.solar.viewmodel.LoginViewModel
 
 class LoginActivity : AppCompatActivity() {
@@ -20,6 +23,9 @@ class LoginActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarPadding()
+        WindowInsetsControllerCompat(window, binding.root)
+            .isAppearanceLightStatusBars = true
 
         rememberedLoginStore = RememberedLoginStore(this)
         rememberedLoginStore.load()?.let { remembered ->
@@ -31,6 +37,7 @@ class LoginActivity : AppCompatActivity() {
         binding.cbRemember.text = "记住登录信息"
         binding.cbAutoLogin.visibility = android.view.View.GONE
         binding.tilUsername.hint = getString(com.robot.solar.R.string.hint_email)
+        binding.tvLoginVersion.text = "版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
         binding.btnLogin.setOnClickListener {
             viewModel.login(
@@ -58,6 +65,11 @@ class LoginActivity : AppCompatActivity() {
                 Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 viewModel.consumeToast()
             }
+        }
+        viewModel.loading.observe(this) { loading ->
+            val busy = loading == true
+            binding.btnLogin.isEnabled = !busy
+            binding.btnLogin.text = if (busy) "正在登录…" else getString(com.robot.solar.R.string.login)
         }
     }
 }

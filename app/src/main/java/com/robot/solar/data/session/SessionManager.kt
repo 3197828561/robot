@@ -37,6 +37,22 @@ class SessionManager private constructor(context: Context) {
         get() = prefs.getString(KEY_PRODUCT_TYPE, null)
         set(value) = prefs.edit { putString(KEY_PRODUCT_TYPE, value) }
 
+    var deviceRole: String?
+        get() = prefs.getString(KEY_DEVICE_ROLE, null)
+        set(value) = prefs.edit { putString(KEY_DEVICE_ROLE, value) }
+
+    var canControlDevice: Boolean
+        get() = prefs.getBoolean(KEY_CAN_CONTROL, false)
+        set(value) = prefs.edit { putBoolean(KEY_CAN_CONTROL, value) }
+
+    var canConfigureDevice: Boolean
+        get() = prefs.getBoolean(KEY_CAN_CONFIGURE, false)
+        set(value) = prefs.edit { putBoolean(KEY_CAN_CONFIGURE, value) }
+
+    var canUpgradeDevice: Boolean
+        get() = prefs.getBoolean(KEY_CAN_UPGRADE, false)
+        set(value) = prefs.edit { putBoolean(KEY_CAN_UPGRADE, value) }
+
     var userEmail: String?
         get() = prefs.getString(KEY_EMAIL, null)
         set(value) = prefs.edit { putString(KEY_EMAIL, value) }
@@ -64,6 +80,10 @@ class SessionManager private constructor(context: Context) {
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_DEVICE_NAME = "device_name"
         private const val KEY_PRODUCT_TYPE = "product_type"
+        private const val KEY_DEVICE_ROLE = "device_role"
+        private const val KEY_CAN_CONTROL = "can_control_device"
+        private const val KEY_CAN_CONFIGURE = "can_configure_device"
+        private const val KEY_CAN_UPGRADE = "can_upgrade_device"
         private const val KEY_EMAIL = "email"
 
         @Volatile

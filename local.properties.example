@@ -8,7 +8,7 @@ adb.path=C:/path/to/Android/Sdk/platform-tools/adb.exe
 emulator.path=C:/path/to/Android/Sdk/emulator/emulator.exe
 
 # HTTP API（当前阿里云 ECS）
-api.base.url=http://47.103.157.213/api
+api.base.url=https://47.103.157.213/api
 app.update.channel=test
 
 # App 发布签名的非敏感配置；密码由 create-release-keystore.ps1 使用 DPAPI 加密保存

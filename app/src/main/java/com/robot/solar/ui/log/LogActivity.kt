@@ -53,6 +53,9 @@ class LogActivity : AppCompatActivity() {
                 }
             )
         }
+        if (intent.getStringExtra(EXTRA_INITIAL_FILTER) == FILTER_ERRORS) {
+            binding.filterGroup.check(binding.btnFilterErrors.id)
+        }
         binding.etLogSearch.doAfterTextChanged { viewModel.setQuery(it?.toString().orEmpty()) }
 
         viewModel.logs.observe(this) { list ->
@@ -133,5 +136,10 @@ class LogActivity : AppCompatActivity() {
             insets
         }
         ViewCompat.requestApplyInsets(binding.root)
+    }
+
+    companion object {
+        const val EXTRA_INITIAL_FILTER = "initial_filter"
+        const val FILTER_ERRORS = "errors"
     }
 }

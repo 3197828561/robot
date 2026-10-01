@@ -7,20 +7,23 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.PopupMenu
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.snackbar.Snackbar
 import com.robot.solar.data.session.SessionManager
 import com.robot.solar.databinding.ActivityDeviceListBinding
 import com.robot.solar.network.http.dto.DeviceDto
 import com.robot.solar.repository.AuthRepository
+import com.robot.solar.repository.DeviceIdentityPolicy
 import com.robot.solar.ui.login.LoginActivity
 import com.robot.solar.ui.main.MainActivity
 import com.robot.solar.ui.common.ProtocolDisplayText
+import com.robot.solar.ui.common.applySystemBarPadding
 import com.robot.solar.update.AppUpdateManager
 import com.robot.solar.utils.LogUtils
 import com.robot.solar.viewmodel.DeviceListViewModel
@@ -34,24 +37,43 @@ class DeviceListActivity : AppCompatActivity() {
     private val viewModel: DeviceListViewModel by viewModels()
     private val adapter = DeviceAdapter { viewModel.selectDevice(it) }
     private val appUpdateManager by lazy { AppUpdateManager(this) }
+    private var devices: List<DeviceDto> = emptyList()
+    private var loadError: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityDeviceListBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.applySystemBarPadding()
 
         binding.rvDevices.layoutManager = LinearLayoutManager(this)
         binding.rvDevices.adapter = adapter
         binding.btnUserCenter.setOnClickListener { showUserMenu() }
+        binding.btnRetry.setOnClickListener { viewModel.loadDevices() }
+        binding.swipeRefresh.setOnRefreshListener { viewModel.loadDevices() }
+        binding.etSearch.doAfterTextChanged { renderDevices() }
 
         viewModel.devices.observe(this) { list ->
-            adapter.submit(list)
-            binding.tvEmpty.isVisible = list.isNullOrEmpty()
+            devices = list.orEmpty()
+            loadError = null
+            renderDevices()
         }
-        viewModel.loading.observe(this) { binding.progress.isVisible = it == true }
+        viewModel.loading.observe(this) { loading ->
+            val isLoading = loading == true
+            binding.progress.isVisible = isLoading && devices.isEmpty()
+            binding.swipeRefresh.isRefreshing = isLoading && devices.isNotEmpty()
+            if (isLoading) binding.statePanel.isVisible = false else renderDevices()
+        }
         viewModel.error.observe(this) { msg ->
             if (!msg.isNullOrBlank()) {
-                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                loadError = msg
+                if (devices.isEmpty()) {
+                    renderDevices()
+                } else {
+                    Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG)
+                        .setAction("重试") { viewModel.loadDevices() }
+                        .show()
+                }
                 viewModel.consumeError()
             }
         }
@@ -69,6 +91,22 @@ class DeviceListActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         appUpdateManager.resumePendingInstall()
+    }
+
+    private fun renderDevices() {
+        if (viewModel.loading.value == true) return
+        val filtered = DeviceListFilter.apply(devices, binding.etSearch.text?.toString().orEmpty())
+        adapter.submit(filtered)
+        binding.swipeRefresh.isRefreshing = false
+        val error = loadError
+        val showState = filtered.isEmpty()
+        binding.statePanel.isVisible = showState
+        binding.btnRetry.isVisible = showState && error != null
+        binding.tvEmpty.text = when {
+            error != null -> error
+            devices.isNotEmpty() -> "没有匹配的设备"
+            else -> "当前账号暂无可用设备"
+        }
     }
 
     private fun showUserMenu() {
@@ -135,10 +173,17 @@ class DeviceListActivity : AppCompatActivity() {
         class VH(itemView: View) : RecyclerView.ViewHolder(itemView) {
             private val name: TextView = itemView.findViewById(com.robot.solar.R.id.tvDeviceName)
             private val id: TextView = itemView.findViewById(com.robot.solar.R.id.tvDeviceId)
+            private val access: TextView = itemView.findViewById(com.robot.solar.R.id.tvDeviceAccess)
 
             fun bind(item: DeviceDto, onClick: (DeviceDto) -> Unit) {
                 name.text = item.displayName
-                id.text = "设备编号：${item.deviceId}  类型：${ProtocolDisplayText.productType(itemView.context, item.productType)}"
+                id.text = "设备编号：${item.deviceId}  类型：${ProtocolDisplayText.productType(itemView.context, DeviceIdentityPolicy.effectiveProductType(item))}"
+                access.text = when (item.role) {
+                    "admin" -> "管理员 · 可控制"
+                    "operator" -> "操作员 · 可控制"
+                    "viewer" -> "观察员 · 仅查看"
+                    else -> if (item.permissions?.control == true) "可控制" else "权限由服务器决定"
+                }
                 itemView.setOnClickListener { onClick(item) }
             }
         }

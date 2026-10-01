@@ -25,6 +25,7 @@
 - Keep Android behavior and UI aligned with platform conventions, standard visual quality, and clear user-facing feedback.
 - Keep the repository reproducible for another developer; document required tools, configuration keys, build commands, and current branch baseline without committing secrets.
 - After each completed change, refresh the repository handoff/status documentation to describe only the current valid state. Replace stale values instead of accumulating historical notes.
+- For every delivered change, create or update `history/YYYY-MM-DD-<version>.md` with the current scope, verification, deployment/publish state, handoff notes, and rollback point. Reuse the same file for the same date and version instead of creating fragmented logs.
 
 ## 执行准则
 

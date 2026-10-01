@@ -26,7 +26,16 @@ data class TokenResponse(
 data class DeviceDto(
     @SerializedName("device_id") val deviceId: String,
     @SerializedName("display_name") val displayName: String,
-    @SerializedName(value = "product_type", alternate = ["productType"]) val productType: String? = null
+    @SerializedName(value = "product_type", alternate = ["productType"]) val productType: String? = null,
+    val role: String? = null,
+    val permissions: DevicePermissionsDto? = null
+)
+
+data class DevicePermissionsDto(
+    val view: Boolean = true,
+    val control: Boolean = false,
+    val configure: Boolean = false,
+    val upgrade: Boolean = false
 )
 
 data class JobDto(

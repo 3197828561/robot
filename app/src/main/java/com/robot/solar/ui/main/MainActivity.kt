@@ -30,6 +30,7 @@ import com.robot.solar.network.mqtt.CoverageTaskSelection
 import com.robot.solar.network.mqtt.PoseMessage
 import com.robot.solar.network.mqtt.StatusMessage
 import com.robot.solar.ui.common.ProtocolDisplayText
+import com.robot.solar.ui.about.AboutActivity
 import com.robot.solar.ui.device.DeviceListActivity
 import com.robot.solar.ui.firmware.FirmwareActivity
 import com.robot.solar.ui.job.JobListActivity
@@ -180,7 +181,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnResume.setOnClickListener { viewModel.sendMissionCommand("恢复任务", "resume") }
         binding.btnReplan.setOnClickListener { viewModel.sendMissionCommand("重新规划", "replan") }
         binding.btnEmergency.setOnClickListener { viewModel.sendCmd("紧急停止", "estop") }
-        binding.btnClearEstop.setOnClickListener { viewModel.sendCmd("解除急停", "clear_estop") }
+        binding.btnClearEstop.setOnClickListener { confirmClearEstop() }
         binding.btnRemoteEmergency.setOnClickListener {
             binding.directionPad.cancelInput(notifyRelease = false)
             viewModel.stopRemote(sendZero = false)
@@ -205,10 +206,16 @@ class MainActivity : AppCompatActivity() {
         binding.btnMapZoomIn.setOnClickListener { binding.mapPageView.zoomIn() }
         binding.btnMapZoomOut.setOnClickListener { binding.mapPageView.zoomOut() }
         binding.btnMapLocate.setOnClickListener { centerMapOnRobot() }
-        binding.btnViewLogs.setOnClickListener {
+        binding.recordsPage.btnViewLogs.setOnClickListener {
             startActivity(Intent(this, LogActivity::class.java))
         }
-        binding.btnJobs.setOnClickListener {
+        binding.recordsPage.btnFaultLogs.setOnClickListener {
+            startActivity(
+                Intent(this, LogActivity::class.java)
+                    .putExtra(LogActivity.EXTRA_INITIAL_FILTER, LogActivity.FILTER_ERRORS)
+            )
+        }
+        binding.recordsPage.btnJobs.setOnClickListener {
             startActivity(Intent(this, JobListActivity::class.java))
         }
         binding.btnWifi.setOnClickListener {
@@ -217,6 +224,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnFirmware.setOnClickListener {
             startActivity(Intent(this, FirmwareActivity::class.java))
         }
+        binding.btnAbout.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
+        }
+        binding.btnAccount.setOnClickListener { returnToDeviceList() }
         binding.btnStatusDiagnostics.setOnClickListener {
             MaterialAlertDialogBuilder(this)
                 .setTitle("完整诊断信息")
@@ -246,7 +257,27 @@ class MainActivity : AppCompatActivity() {
         binding.navHome.setOnClickListener { showPage(Page.HOME) }
         binding.navMap.setOnClickListener { showPage(Page.MAP) }
         binding.navRemote.setOnClickListener { showPage(Page.REMOTE) }
-        binding.navStatus.setOnClickListener { showPage(Page.STATUS) }
+        binding.navRecords.setOnClickListener { showPage(Page.RECORDS) }
+        binding.navStatus.setOnClickListener { showPage(Page.MORE) }
+
+        binding.btnWifi.isEnabled = false
+        binding.btnFirmware.isEnabled = false
+        binding.tvMaintenanceHint.text = when {
+            viewModel.canConfigureDevice || viewModel.canUpgradeDevice ->
+                "Robot执行链路尚未接入，Wi-Fi配置和固件升级暂不可用。"
+            else -> "当前账号没有设备维护权限。"
+        }
+    }
+
+    private fun confirmClearEstop() {
+        MaterialAlertDialogBuilder(this)
+            .setTitle("确认解除急停")
+            .setMessage("请先确认机器人周围安全、人员已远离运动区域。解除后机器人仍需等待后续控制指令。")
+            .setNegativeButton("取消", null)
+            .setPositiveButton("确认解除") { _, _ ->
+                viewModel.sendCmd("解除急停", "clear_estop")
+            }
+            .show()
     }
 
     private fun returnToDeviceList() {
@@ -824,15 +855,18 @@ class MainActivity : AppCompatActivity() {
         binding.sectionHome.visibility = if (page == Page.HOME) View.VISIBLE else View.GONE
         binding.sectionMap.visibility = if (page == Page.MAP) View.VISIBLE else View.GONE
         binding.sectionRemote.visibility = if (page == Page.REMOTE) View.VISIBLE else View.GONE
-        binding.sectionStatus.visibility = if (page == Page.STATUS) View.VISIBLE else View.GONE
+        binding.recordsPage.root.visibility = if (page == Page.RECORDS) View.VISIBLE else View.GONE
+        binding.sectionStatus.visibility = if (page == Page.MORE) View.VISIBLE else View.GONE
         selectNav(binding.navHome, page == Page.HOME)
         selectNav(binding.navMap, page == Page.MAP)
         selectNav(binding.navRemote, page == Page.REMOTE)
-        selectNav(binding.navStatus, page == Page.STATUS)
+        selectNav(binding.navRecords, page == Page.RECORDS)
+        selectNav(binding.navStatus, page == Page.MORE)
     }
 
     private fun remoteUnavailableReason(): String {
         return when {
+            !viewModel.canControlDevice -> "当前账号只有查看权限"
             viewModel.mqttConnected.value != true -> "MQTT 未连接，手动控制不可用"
             viewModel.deviceOnline.value != true -> "设备离线，手动控制不可用"
             viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许手动控制"
@@ -843,6 +877,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun manualControlStateText(): String = when {
         currentAvailability.canRemote -> "可用"
+        !viewModel.canControlDevice -> "当前账号只有查看权限"
         viewModel.mqttConnected.value != true -> "MQTT 未连接"
         viewModel.deviceOnline.value != true -> "设备离线"
         viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许"
@@ -860,7 +895,8 @@ private enum class Page {
     HOME,
     MAP,
     REMOTE,
-    STATUS
+    RECORDS,
+    MORE
 }
 
 internal object MainMapDisplayPolicy {

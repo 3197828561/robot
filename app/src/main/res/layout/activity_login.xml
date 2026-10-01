@@ -130,6 +130,15 @@
                     android:textSize="16sp"
                     app:backgroundTint="@color/control_primary"
                     app:cornerRadius="8dp" />
+
+                <TextView
+                    android:id="@+id/tvLoginVersion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp"
+                    android:gravity="center"
+                    android:textColor="@color/control_text_muted"
+                    android:textSize="12sp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </androidx.constraintlayout.widget.ConstraintLayout>

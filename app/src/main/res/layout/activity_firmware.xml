@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/monitor_bg"
+    android:background="@color/control_page_bg"
     android:fillViewport="true">
 
     <LinearLayout
@@ -16,11 +16,20 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="@color/monitor_top_bar"
-            android:title="固件升级"
-            android:titleTextColor="@color/monitor_on_dark"
+            android:background="@color/control_top_bar"
+            android:title="Robot固件升级"
+            android:titleTextColor="@color/control_on_dark"
             app:navigationIcon="@android:drawable/ic_menu_close_clear_cancel"
-            app:navigationIconTint="@color/monitor_on_dark" />
+            app:navigationIconTint="@color/control_on_dark" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@color/control_legend_bg"
+            android:padding="12dp"
+            android:text="维护操作：升级期间不要断电或移动机器人。提交成功不等于升级完成，最终结果以Robot状态为准。"
+            android:textColor="@color/control_text_muted" />
 
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -38,21 +47,21 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="版本：--"
-                    android:textColor="@color/monitor_card_title" />
+                    android:textColor="@color/control_title" />
 
                 <TextView
                     android:id="@+id/tvNotes"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:textColor="@color/monitor_label" />
+                    android:textColor="@color/control_text_muted" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnUpgrade"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="检查并升级" />
+                    android:text="提交升级" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
     </LinearLayout>
