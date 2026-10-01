@@ -7,6 +7,15 @@ on:
       - develop
     tags:
       - "v*"
+    paths:
+      - "app/**"
+      - "gradle/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle.properties"
+      - "gradlew"
+      - "gradlew.bat"
+      - "tools/run-gradle.ps1"
   workflow_dispatch:
     inputs:
       channel:
