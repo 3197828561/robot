@@ -45,8 +45,7 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 4. 松开后应看到 `STOP` 零速消息。
 5. 点击切回自动模式，脚本返回 `operationalMode=auto`。
 
-脚本同时支持手动页面的急停和解除急停。其他任务命令会返回
-`SIM_MANUAL_MODE_ONLY`，避免误以为完整任务模拟已经启动。
+脚本同时支持急停、解除急停，以及开始、停止、暂停、恢复、重新规划。开始后状态变为运行中，停止后任务结束。未识别命令仍返回 `SIM_MANUAL_MODE_ONLY`。
 
 ## 配置
 

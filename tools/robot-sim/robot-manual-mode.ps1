@@ -29,6 +29,11 @@ $script:OperationalMode = "auto"
 $script:SafetyState = "normal"
 $script:LinearSpeed = 0.0
 $script:AngularSpeed = 0.0
+$script:MissionId = $null
+$script:RunState = "idle"
+$script:OrchestrationState = "idle"
+$script:Phase = "none"
+$script:TaskKind = $null
 $script:LastRemoteAt = $null
 $script:LastPrintedRemoteAt = $null
 $script:LastPrintedLinear = $null
@@ -59,16 +64,16 @@ function Publish-Status {
     $payload["pressureKpa"] = 101.3
     $payload["antiFallLeftM"] = 0.8
     $payload["antiFallRightM"] = 0.8
-    $payload["missionId"] = $null
-    $payload["rootMissionId"] = $null
-    $payload["taskKind"] = $null
-    $payload["runState"] = "idle"
-    $payload["orchestrationState"] = "idle"
-    $payload["taskStackDepth"] = 0
+    $payload["missionId"] = $script:MissionId
+    $payload["rootMissionId"] = $script:MissionId
+    $payload["taskKind"] = $script:TaskKind
+    $payload["runState"] = $script:RunState
+    $payload["orchestrationState"] = $script:OrchestrationState
+    $payload["taskStackDepth"] = if ($script:MissionId) { 1 } else { 0 }
     $payload["interruptionReason"] = $null
     $payload["operationalMode"] = $script:OperationalMode
     $payload["safetyState"] = $script:SafetyState
-    $payload["phase"] = "none"
+    $payload["phase"] = $script:Phase
     $payload["activeAction"] = if ($script:OperationalMode -eq "manual") { "remote" } else { "" }
     $payload["waypointIndex"] = 0
     $payload["waypointCount"] = 0
@@ -168,6 +173,34 @@ function Handle-Cmd {
             } else {
                 $script:SafetyState = "normal"
             }
+        }
+        "start" {
+            $script:MissionId = "sim-mission-1"
+            $script:TaskKind = "coverage"
+            $script:RunState = "running"
+            $script:OrchestrationState = "running"
+            $script:Phase = "executing"
+        }
+        "stop" {
+            $script:RunState = "canceled"
+            $script:OrchestrationState = "canceled"
+            $script:Phase = "none"
+            $script:MissionId = $null
+            $script:TaskKind = $null
+        }
+        "pause" {
+            $script:RunState = "paused"
+            $script:OrchestrationState = "paused_by_user"
+        }
+        "resume" {
+            $script:RunState = "running"
+            $script:OrchestrationState = "running"
+            $script:Phase = "executing"
+        }
+        "replan" {
+            $script:Phase = "planning"
+            $script:RunState = "running"
+            $script:OrchestrationState = "running"
         }
         default {
             $status = "failed"
@@ -274,7 +307,7 @@ Write-Host "Robot manual-mode simulator"
 Write-Host "Broker: $($context.HostName):$($context.Port)"
 Write-Host "Username: $($context.Username)"
 Write-Host "Device: $($context.ProductType)/$($context.DeviceId)"
-Write-Host "Replies to: manual, auto, estop, clear_estop"
+Write-Host "Replies to: manual, auto, estop, clear_estop, start, stop, pause, resume, replan"
 Write-Host "Logs remote speed messages. Press Ctrl+C to stop."
 Write-Host ""
 
@@ -292,6 +325,17 @@ try {
         }
         if (($now - $lastStatusAt).TotalMilliseconds -ge $StatusIntervalMs) {
             Publish-Status
+            $pose = New-RobotBasePayload $context
+            $pose["mapId"] = 1
+            $pose["mapVersion"] = 1
+            $pose["blockId"] = 1
+            $pose["cellRow"] = 0
+            $pose["cellCol"] = 0
+            $pose["innerRow"] = 0
+            $pose["innerCol"] = 0
+            $pose["headingCode"] = 0
+            $pose["heading"] = "block_u_positive"
+            Publish-MqttJson $context "$($context.TopicPrefix)/pose" $pose 0
             $lastStatusAt = $now
         }
         foreach ($line in @(Read-NewSubscriberLines)) { Handle-DownlinkLine $line }
