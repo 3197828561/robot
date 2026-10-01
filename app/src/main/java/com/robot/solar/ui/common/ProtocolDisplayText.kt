@@ -112,17 +112,60 @@ object ProtocolDisplayText {
 
     fun orchestrationState(value: String?): String = when (value) {
         "idle" -> "空闲"
-        "running" -> "根任务运行中"
-        "paused_by_user" -> "用户暂停"
-        "paused_by_safety" -> "安全原因暂停"
-        "running_child" -> "执行内部子任务"
-        "resuming" -> "恢复根任务中"
-        "succeeded" -> "根任务已完成"
-        "failed" -> "根任务失败"
-        "canceled" -> "根任务已取消"
-        "unknown" -> "未知"
+        "running" -> "正在执行任务"
+        "paused_by_user" -> "已暂停"
+        "paused_by_safety" -> "因安全保护已暂停"
+        "running_child" -> "正在执行内部动作"
+        "resuming" -> "正在恢复任务"
+        "succeeded" -> "任务已完成"
+        "failed" -> "任务失败"
+        "canceled" -> "任务已取消"
+        "unknown" -> "任务状态未知"
         null, "" -> "--"
         else -> value
+    }
+
+    fun runState(value: String?): String = when (value) {
+        "idle" -> "空闲"
+        "starting" -> "正在启动"
+        "running" -> "运行中"
+        "paused" -> "已暂停"
+        "succeeded" -> "已完成"
+        "failed" -> "执行失败"
+        "canceled" -> "已取消"
+        "unknown" -> "状态未知"
+        null, "" -> "暂无任务"
+        else -> "状态未知"
+    }
+
+    fun safetyState(value: String?): String = when (value) {
+        "normal" -> "正常"
+        "low_battery" -> "低电量保护"
+        "fault" -> "设备故障"
+        "estop" -> "急停中"
+        "clearing_estop" -> "正在解除急停"
+        "unknown" -> "状态未知"
+        null, "" -> "暂无数据"
+        else -> "状态未知"
+    }
+
+    fun missionPhase(value: String?): String = when (value) {
+        "none" -> "未开始"
+        "waiting_for_robot" -> "等待机器人响应"
+        "resolving_start" -> "确认任务起点"
+        "planning" -> "正在规划路径"
+        "executing" -> "正在执行"
+        "placeholder" -> "准备中"
+        "unknown" -> "阶段未知"
+        null, "" -> "暂无阶段信息"
+        else -> "阶段未知"
+    }
+
+    fun activeAction(value: String?): String = when (value?.lowercase()) {
+        "starting" -> "启动任务"
+        "cross_panel" -> "跨板移动"
+        null, "" -> "暂无动作"
+        else -> "执行机器人动作"
     }
 
     fun interruptionReason(value: String?): String = when (value) {

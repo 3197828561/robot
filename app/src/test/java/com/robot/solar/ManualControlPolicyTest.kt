@@ -374,7 +374,7 @@ class ManualControlPolicyTest {
             )
         )
         assertEquals(
-            "根任务已中断，正在执行内部子任务（低电量），栈深 2",
+            "任务已中断，正在执行内部动作（低电量）",
             MissionStatusDisplay.text(
                 runState = "running",
                 safetyState = "normal",
@@ -386,7 +386,7 @@ class ManualControlPolicyTest {
             )
         )
         assertEquals(
-            "根任务已完成",
+            "任务已完成",
             MissionStatusDisplay.text(
                 runState = "succeeded",
                 safetyState = "normal",

@@ -118,7 +118,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindObservers() {
         viewModel.mqttConnected.observe(this) { connected ->
-            binding.tvMqttStatus.text = "MQTT：${if (connected) "已连接" else "未连接"}"
+            binding.tvMqttStatus.text = "通信：${if (connected) "正常" else "断开"}"
             bindStatus(viewModel.status.value)
         }
         viewModel.deviceOnline.observe(this) { online ->
@@ -421,74 +421,131 @@ class MainActivity : AppCompatActivity() {
         val mission = viewModel.missionState.value
         val speed = viewModel.manualSpeedSettings.value ?: ManualSpeedSettings()
         val remoteDetails = listOf(
-            "连接状态：MQTT ${if (viewModel.mqttConnected.value == true) "已连接" else "未连接"} · " +
+            "连接状态：通信${if (viewModel.mqttConnected.value == true) "正常" else "断开"} · " +
                 "机器人${when (viewModel.deviceOnline.value) {
                 true -> "在线"
                 false -> "离线"
                 null -> "--"
             }}",
-            "控制条件：模式 ${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
-                "安全 ${status?.safetyState ?: mission?.safetyState ?: "--"}",
+            "控制条件：模式 ${ProtocolDisplayText.controlMode(
+                this,
+                status?.operationalMode ?: mission?.operationalMode
+            )} · 安全 ${ProtocolDisplayText.safetyState(
+                status?.safetyState ?: mission?.safetyState
+            )}",
             "手动控制：${manualControlStateText()} · 速度 ${speed.linearSpeedCms.toInt()} cm/s / " +
                 String.format(Locale.getDefault(), "%.1f rad/s", speed.angularSpeedRadps)
         ).joinToString("\n")
         binding.tvStatusDetails.text = details
         binding.tvRemoteStatus.text = remoteDetails
         binding.tvRemoteModeState.text =
-            "运行模式：${status?.operationalMode ?: mission?.operationalMode ?: "--"} · " +
-                "安全状态：${status?.safetyState ?: mission?.safetyState ?: "--"}"
+            "运行模式：${ProtocolDisplayText.controlMode(
+                this,
+                status?.operationalMode ?: mission?.operationalMode
+            )} · 安全状态：${ProtocolDisplayText.safetyState(
+                status?.safetyState ?: mission?.safetyState
+            )}"
         bindHomeStatusCard(status)
         bindStatusSummary(status)
     }
 
     private fun bindStatusSummary(status: StatusMessage?) {
+        val deviceOnline = viewModel.deviceOnline.value == true
+        val mqttConnected = viewModel.mqttConnected.value == true
         val telemetry = onlineTelemetry(status)
         binding.tvStatusConnectionSummary.text = listOf(
-            "MQTT：${if (viewModel.mqttConnected.value == true) "已连接" else "未连接"}",
-            "机器人：${when (viewModel.deviceOnline.value) {
+            "通信服务：${if (mqttConnected) "连接正常" else "连接中断"}",
+            "机器人状态：${when (viewModel.deviceOnline.value) {
                 true -> "在线"
                 false -> "离线"
-                null -> "--"
-            }}"
+                null -> "等待状态"
+            }}",
+            when {
+                mqttConnected && !deviceOnline -> "未收到机器人心跳，请检查机器人电源和网络"
+                !mqttConnected -> "正在尝试重新连接通信服务"
+                else -> "实时数据接收正常"
+            }
         ).joinToString("\n")
 
-        binding.tvStatusDeviceSummary.text = listOf(
-            "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}",
-            "工作状态：${status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) } ?: "--"}",
-            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}",
-            "设备状态：${status?.let { ProtocolDisplayText.deviceStatus(this, it.deviceStatus) } ?: "--"}",
-            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}",
-            "GPS：${gpsSummary(telemetry)}",
-            "RK3588：${formatTelemetry(telemetry?.rk3588CpuTemperatureCelsius, 1, "°C")}",
-            "总电流：${formatTelemetry(telemetry?.totalCurrentAmpere, 2, "A")}",
-            "板面倾角估算：${formatTelemetry(telemetry?.panelTiltDeg, 1, "°")}"
-        ).joinToString("\n")
+        binding.tvStatusDeviceSummary.text = if (!deviceOnline) {
+            "机器人离线，暂无实时电量、运行状态和设备遥测。"
+        } else {
+            listOf(
+                "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "暂无数据"}",
+                "工作状态：${ProtocolDisplayText.workStatus(this, status?.workStatus)}",
+                "运行模式：${ProtocolDisplayText.controlMode(this, status?.controlMode)}",
+                "设备状态：${ProtocolDisplayText.deviceStatus(this, status?.deviceStatus)}",
+                "运动状态：${ProtocolDisplayText.movementStatus(this, status?.movementStatus)}",
+                "GPS 定位：${gpsSummary(telemetry)}",
+                "主控温度：${formatTelemetry(telemetry?.rk3588CpuTemperatureCelsius, 1, "°C")}",
+                "整机电流：${formatTelemetry(telemetry?.totalCurrentAmpere, 2, "A")}",
+                "板面倾角：${formatTelemetry(telemetry?.panelTiltDeg, 1, "°")}"
+            ).joinToString("\n")
+        }
 
-        binding.tvStatusMissionSummary.text = listOf(
-            "runState：${status?.runState ?: "--"}",
-            "phase：${status?.phase ?: "--"}",
-            "activeAction：${status?.activeAction?.takeIf { it.isNotBlank() } ?: "--"}",
-            "航点：${status?.waypointIndex ?: "--"} / ${status?.waypointCount ?: "--"}",
-            "missionId：${status?.missionId?.let(::compactId) ?: "--"}"
-        ).joinToString("\n")
+        binding.tvStatusMissionSummary.text = if (!deviceOnline) {
+            "机器人离线，暂无当前任务信息。"
+        } else {
+            listOf(
+                "任务状态：${MissionStatusDisplay.text(
+                    runState = status?.runState,
+                    safetyState = status?.safetyState,
+                    awaitingStart = viewModel.awaitingStartStatus.value == true,
+                    awaitingClearEstop = viewModel.awaitingClearEstopStatus.value == true,
+                    orchestrationState = status?.orchestrationState,
+                    taskStackDepth = status?.taskStackDepth,
+                    interruptionReason = status?.interruptionReason
+                )}",
+                "当前阶段：${ProtocolDisplayText.missionPhase(status?.phase)}",
+                "当前动作：${ProtocolDisplayText.activeAction(status?.activeAction)}",
+                "任务进度：${if (status?.waypointIndex != null && status.waypointCount != null) {
+                    "${status.waypointIndex} / ${status.waypointCount}"
+                } else {
+                    "暂无数据"
+                }}",
+                "任务编号：${status?.missionId?.let(::compactId) ?: "暂无任务"}"
+            ).joinToString("\n")
+        }
 
-        binding.tvStatusSafetySummary.text = listOf(
-            "safetyState：${status?.safetyState ?: "--"}",
-            "errorCode：${status?.missionErrorCode ?: "--"}",
-            "retryable：${status?.errorRetryable ?: "--"}",
-            "errorMessage：${status?.errorMessage?.takeIf { it.isNotBlank() } ?: "--"}"
-        ).joinToString("\n")
+        binding.tvStatusSafetySummary.text = if (!deviceOnline) {
+            "机器人离线，无法确认实时安全状态。恢复连接前请勿进行远程操作。"
+        } else {
+            val hasError = status?.missionErrorCode?.let { it != 0 } == true ||
+                !status?.errorMessage.isNullOrBlank()
+            buildList {
+                add("安全状态：${ProtocolDisplayText.safetyState(status?.safetyState)}")
+                add(
+                    if (hasError) {
+                        "当前故障：${status?.errorMessage?.takeIf { it.isNotBlank() }
+                            ?: "故障代码 ${status?.missionErrorCode}"}"
+                    } else {
+                        "当前故障：无"
+                    }
+                )
+                if (hasError) {
+                    add("可否重试：${if (status?.errorRetryable == true) "可以重试" else "请检查设备后处理"}")
+                }
+            }.joinToString("\n")
+        }
 
         binding.tvStatusMapSummary.text = listOf(
-            "mapId：${currentMapState.mapId ?: "--"}",
-            "mapVersion：${currentMapState.mapVersion ?: "--"}",
-            "blockId：${currentPose?.blockId ?: "--"}",
-            "cellId：${currentPose?.cellId ?: "--"}",
-            "heading：${currentPose?.let { ProtocolDisplayText.mapHeading(it.headingCode, it.heading) } ?: "--"}"
+            if (currentMapState.mapId != null) {
+                "当前地图：编号 ${currentMapState.mapId} · 版本 ${currentMapState.mapVersion ?: "未知"}"
+            } else {
+                "当前地图：尚未同步"
+            },
+            if (deviceOnline && currentPose != null) {
+                "机器人位置：区域 ${currentPose?.blockId ?: "未知"} · 单元 ${currentPose?.cellId ?: "未知"}"
+            } else {
+                "机器人位置：暂无实时定位"
+            },
+            "机器人朝向：${currentPose?.let {
+                ProtocolDisplayText.mapHeading(it.headingCode, it.heading)
+            } ?: "暂无数据"}"
         ).joinToString("\n")
 
         binding.tvStatusHeartbeatSummary.text =
-            "APP 最近收到心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
+            "最后收到机器人心跳：${binding.tvLastHeartbeat.text.removePrefix("最后在线时间：")}"
     }
 
     private fun compactId(value: String): String =
@@ -621,7 +678,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun gpsStatusText(value: Int?): String = when (value) {
-        null -> "GPS状态未知"
+        null -> "暂无定位数据"
         0 -> "无定位"
         1 -> "2D定位"
         2 -> "3D定位"
@@ -632,7 +689,7 @@ class MainActivity : AppCompatActivity() {
     private fun formatTelemetry(value: Double?, decimals: Int, unit: String): String =
         value?.takeIf { it.isFinite() }?.let {
             String.format(Locale.getDefault(), "%.${decimals}f %s", it, unit)
-        } ?: "--"
+        } ?: "暂无数据"
 
     private fun bindSelectedMap() {
         bindMap(MainMapDisplayPolicy.select(latestHttpMapV2State))
@@ -756,6 +813,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun bindHomeStatusCard(status: StatusMessage?) {
+        val deviceOnline = viewModel.deviceOnline.value == true
+        val unavailable = if (deviceOnline) "暂无数据" else "设备离线"
         val missionStatus = status?.let {
             MissionStatusDisplay.text(
                 runState = it.runState,
@@ -769,27 +828,35 @@ class MainActivity : AppCompatActivity() {
         }
         val homeWorkStatus = missionStatus?.takeUnless { it == "--" }
             ?: status?.let { ProtocolDisplayText.workStatus(this, it.workStatus) }
-            ?: "--"
+            ?: unavailable
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeOnline)?.text =
             "在线状态：${when (viewModel.deviceOnline.value) {
                 true -> "在线"
                 false -> "离线"
-                null -> "--"
+                null -> "等待状态"
             }}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeWorkStatus)?.text =
             "工作状态：$homeWorkStatus"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeControlMode)?.text =
-            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: "--"}"
+            "控制模式：${status?.let { ProtocolDisplayText.controlMode(this, it.controlMode) } ?: unavailable}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeBattery)?.text =
-            "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: "--"}"
+            "电量：${status?.batteryPercent?.let { "${it.toInt().coerceIn(0, 100)}%" } ?: unavailable}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeLinearSpeed)?.text =
-            "线速度：${status?.linearSpeedCms?.let { String.format(Locale.getDefault(), "%.0f cm/s", it) } ?: "--"}"
+            "线速度：${status?.linearSpeedCms?.let {
+                String.format(Locale.getDefault(), "%.0f cm/s", it)
+            } ?: unavailable}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeAngularSpeed)?.text =
-            "角速度：${status?.angularSpeedRadps?.let { String.format(Locale.getDefault(), "%.2f rad/s", it) } ?: "--"}"
+            "角速度：${status?.angularSpeedRadps?.let {
+                String.format(Locale.getDefault(), "%.2f rad/s", it)
+            } ?: unavailable}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeDeviceStatus)?.text =
-            "设备状态：${status?.let { ProtocolDisplayText.deviceStatus(this, it.deviceStatus) } ?: "--"}"
+            "设备状态：${status?.let {
+                ProtocolDisplayText.deviceStatus(this, it.deviceStatus)
+            } ?: unavailable}"
         findViewById<TextView?>(com.robot.solar.R.id.tvHomeMovementStatus)?.text =
-            "运动状态：${status?.let { ProtocolDisplayText.movementStatus(this, it.movementStatus) } ?: "--"}"
+            "运动状态：${status?.let {
+                ProtocolDisplayText.movementStatus(this, it.movementStatus)
+            } ?: unavailable}"
     }
 
     private fun bindCommandRows(items: List<StructuredLogEntity>) {
@@ -867,7 +934,7 @@ class MainActivity : AppCompatActivity() {
     private fun remoteUnavailableReason(): String {
         return when {
             !viewModel.canControlDevice -> "当前账号只有查看权限"
-            viewModel.mqttConnected.value != true -> "MQTT 未连接，手动控制不可用"
+        viewModel.mqttConnected.value != true -> "通信连接已断开，手动控制不可用"
             viewModel.deviceOnline.value != true -> "设备离线，手动控制不可用"
             viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许手动控制"
             viewModel.missionState.value?.operationalMode != "manual" -> "正在等待机器人切换到手动模式"
@@ -878,7 +945,7 @@ class MainActivity : AppCompatActivity() {
     private fun manualControlStateText(): String = when {
         currentAvailability.canRemote -> "可用"
         !viewModel.canControlDevice -> "当前账号只有查看权限"
-        viewModel.mqttConnected.value != true -> "MQTT 未连接"
+        viewModel.mqttConnected.value != true -> "通信连接已断开"
         viewModel.deviceOnline.value != true -> "设备离线"
         viewModel.missionState.value?.safetyState != "normal" -> "安全状态不允许"
         viewModel.missionState.value?.operationalMode != "manual" -> "未进入手动模式"

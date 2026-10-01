@@ -127,21 +127,20 @@ object MissionStatusDisplay {
                 } else {
                     when (orchestrationState) {
                         "idle" -> "空闲"
-                        "running" -> "根任务运行中"
-                        "paused_by_user" -> "根任务已由用户暂停"
-                        "paused_by_safety" -> "根任务因安全原因暂停"
+                        "running" -> "正在执行任务"
+                        "paused_by_user" -> "已暂停"
+                        "paused_by_safety" -> "因安全保护已暂停"
                         "running_child" -> buildString {
-                            append("根任务已中断，正在执行内部子任务")
+                            append("任务已中断，正在执行内部动作")
                             interruptionReason?.takeIf { it.isNotBlank() }?.let {
                                 append("（${if (it == "LOW_BATTERY") "低电量" else it}）")
                             }
-                            if (taskStackDepth != null) append("，栈深 $taskStackDepth")
                         }
-                        "resuming" -> "内部子任务结束，正在恢复根任务"
-                        "succeeded" -> "根任务已完成"
-                        "failed" -> "根任务失败"
-                        "canceled" -> "根任务已取消"
-                        "unknown" -> "根任务状态未知"
+                        "resuming" -> "正在恢复任务"
+                        "succeeded" -> "任务已完成"
+                        "failed" -> "任务失败"
+                        "canceled" -> "任务已取消"
+                        "unknown" -> "任务状态未知"
                         else -> when (runState) {
                             "idle" -> "空闲"
                             "starting" -> "启动中"

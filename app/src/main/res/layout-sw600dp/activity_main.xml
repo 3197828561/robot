@@ -750,7 +750,7 @@
                         android:lineSpacingExtra="3dp"
                         android:textColor="@color/control_text"
                         android:textSize="14sp"
-                        tools:text="连接状态：MQTT -- · 机器人 --&#10;控制条件：模式 -- · 安全 --&#10;手动控制：--" />
+                        tools:text="连接状态：通信正常 · 机器人在线&#10;控制条件：模式 自动模式 · 安全 正常&#10;手动控制：--" />
 
                     <com.robot.solar.ui.main.ManualSpeedControlView
                         android:id="@+id/manualSpeedControl"
@@ -846,7 +846,7 @@
                                 android:lineSpacingExtra="3dp"
                                 android:textColor="@color/control_text"
                                 android:textSize="14sp"
-                                tools:text="MQTT：已连接&#10;机器人：在线" />
+                                tools:text="通信服务：连接正常&#10;机器人状态：在线&#10;实时数据接收正常" />
 
                             <TextView
                                 android:id="@+id/tvStatusDeviceSummary"
@@ -856,7 +856,7 @@
                                 android:lineSpacingExtra="3dp"
                                 android:textColor="@color/control_text_muted"
                                 android:textSize="14sp"
-                                tools:text="电量：80%&#10;工作状态：运行中" />
+                                tools:text="电量：80%&#10;工作状态：运行中&#10;主控温度：45.2 °C" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -894,7 +894,7 @@
                                 android:lineSpacingExtra="3dp"
                                 android:textColor="@color/control_text"
                                 android:textSize="14sp"
-                                tools:text="runState：--&#10;phase：--" />
+                                tools:text="任务状态：运行中&#10;当前阶段：正在执行&#10;当前动作：跨板移动" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -932,7 +932,7 @@
                                 android:lineSpacingExtra="3dp"
                                 android:textColor="@color/control_text"
                                 android:textSize="14sp"
-                                tools:text="safetyState：normal&#10;errorCode：--" />
+                                tools:text="安全状态：正常&#10;当前故障：无" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
@@ -970,7 +970,7 @@
                                 android:lineSpacingExtra="3dp"
                                 android:textColor="@color/control_text"
                                 android:textSize="14sp"
-                                tools:text="mapId：--&#10;blockId：--" />
+                                tools:text="当前地图：编号 1 · 版本 1&#10;机器人位置：区域 1 · 单元 12" />
 
                             <TextView
                                 android:id="@+id/tvStatusHeartbeatSummary"

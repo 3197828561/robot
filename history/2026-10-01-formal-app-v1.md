@@ -8,7 +8,9 @@
 - 增加设备搜索、刷新、失败重试、权限说明和关于页面；
 - Wi-Fi 与 Robot OTA 在执行闭环完成前保持禁用；
 - 适配 Android 15 系统栏，并分别整理手机与平板布局；
-- 更新 GitHub Actions、配置模板、交付清单和当前交接文档。
+- 更新 GitHub Actions、配置模板、交付清单和当前交接文档；
+- 更多页将 `rk3588CpuTemperatureCelsius` 显示为「主控温度」，任务状态不再对用户展示「根任务/栈深」；
+- 补充 `docs/app-control-field-mapping.md`：每个按钮对应的 HTTP/MQTT 主题、字段、取值和界面文案。
 
 ## 验证
 

@@ -35,7 +35,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 blockId">
+                android:hint="起点区域编号">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartBlockId"
@@ -47,7 +47,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 cellRow">
+                android:hint="起点光伏板行号">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartCellRow"
@@ -59,7 +59,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 cellCol">
+                android:hint="起点光伏板列号">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartCellCol"
@@ -71,7 +71,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 innerRow">
+                android:hint="起点板内行号">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartInnerRow"
@@ -83,7 +83,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 innerCol">
+                android:hint="起点板内列号">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartInnerCol"
@@ -95,7 +95,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="起点 heading（0-3）">
+                android:hint="机器人朝向编号（0-3）">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etStartHeading"
@@ -136,7 +136,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="heading：0 横向正向，1 横向反向，2 纵向正向，3 纵向反向"
+            android:text="朝向编号：0 横向正向，1 横向反向，2 纵向正向，3 纵向反向"
             android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>

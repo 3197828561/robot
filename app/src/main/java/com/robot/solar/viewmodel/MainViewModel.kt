@@ -545,7 +545,7 @@ class MainViewModel internal constructor(
             return
         }
         if (!canSendCommand(action)) {
-            rejectCommand(action, "MQTT 未连接、设备离线或命令不受支持")
+            rejectCommand(action, "通信未连接、设备离线或命令不受支持")
             return
         }
         if (!BuildConfig.DEBUG_CONTROL_BYPASS && pendingCommands.isNotEmpty()) {
@@ -588,7 +588,7 @@ class MainViewModel internal constructor(
             action = command.cmd,
             label = label,
             status = CommandStatus.SENDING,
-            message = "正在发布到 MQTT",
+            message = "正在发布到通信服务",
             paramsSummary = paramsSummary
         )
         viewModelScope.launch(Dispatchers.IO) {
