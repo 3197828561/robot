@@ -61,6 +61,7 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 ## 协作边界
 
 - App 当前状态：[docs/project-status.md](docs/project-status.md)
+- App 功能与交接：[docs/app-handoff.md](docs/app-handoff.md)
 - 需求与文档索引：[docs/README.md](docs/README.md)
 - Cloud 部署与 API：`HS678/cloud-server`
 - Robot 硬件交接与联调基线：`HS678/robot-integration`
