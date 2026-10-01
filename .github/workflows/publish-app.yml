@@ -12,7 +12,7 @@ on:
       channel:
         description: Release channel
         type: choice
-        options: [test, stable]
+        options: [debug, test, stable]
         default: test
         required: true
 
@@ -75,7 +75,8 @@ jobs:
       - name: Test and build signed APK
         shell: pwsh
         run: |
-          ./tools/run-gradle.ps1 testDebugUnitTest lintDebug assembleRelease `
+          $task = if ('${{ steps.release.outputs.channel }}' -eq 'debug') { 'assembleDebug' } else { 'assembleRelease' }
+          ./tools/run-gradle.ps1 testDebugUnitTest lintDebug $task `
             "-Papp.version.code=${{ steps.release.outputs.version_code }}" `
             "-Papp.version.name=${{ steps.release.outputs.version_name }}" `
             "-Papp.update.channel=${{ steps.release.outputs.channel }}" `
@@ -84,7 +85,8 @@ jobs:
       - name: Publish APK to cloud channel
         shell: pwsh
         run: |
-          $apk = Resolve-Path 'app/build/outputs/apk/release/app-release.apk'
+          $apkName = if ('${{ steps.release.outputs.channel }}' -eq 'debug') { 'app/build/outputs/apk/debug/app-debug.apk' } else { 'app/build/outputs/apk/release/app-release.apk' }
+          $apk = Resolve-Path $apkName
           $sha = (Get-FileHash -LiteralPath $apk -Algorithm SHA256).Hash.ToLowerInvariant()
           $base = $env:APP_RELEASE_BASE_URL.TrimEnd('/')
           $query = [Uri]::EscapeDataString('${{ steps.release.outputs.version_name }}')

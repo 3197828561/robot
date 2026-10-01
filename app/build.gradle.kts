@@ -72,8 +72,14 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "光伏机器人调试")
             buildConfigField("boolean", "DEBUG_CONTROL_BYPASS", "true")
             manifestPlaceholders["usesCleartextTraffic"] = "true"
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("distribution")
+            }
         }
         release {
             isMinifyEnabled = false
