@@ -31,17 +31,41 @@ tools/publish-test-app.ps1   测试渠道发布与验签
 
 ## 本地配置
 
+### 环境要求
+
+- Windows 10/11 和 PowerShell 7；
+- JDK 21；
+- Android SDK Platform 35、对应 Build Tools、Platform Tools；
+- Git。Android Studio 不是命令行构建必需项，但推荐用于 SDK 管理和真机调试。
+
+### 从 GitHub 获取当前联调分支
+
 ```powershell
+git clone git@github.com:3197828561/robot.git
+Set-Location robot
+git switch feature/app-update-channel
 Copy-Item local.properties.example local.properties
 ```
 
-真实服务器地址、MQTT 密码和工具路径只放在被 Git 忽略的 `local.properties`。不要把密码、Token、JKS 或 Base64 提交到仓库。
+至少填写 `sdk.dir` 和 `java.home`。仅运行单元测试、Lint 和 Debug 构建时，MQTT 密码可以
+留空；连接真实 Robot 时再通过受控交接材料填写，不能提交 `local.properties`。
+
+```powershell
+.\tools\run-gradle.ps1 testDebugUnitTest lintDebug assembleDebug
+```
+
+成功后 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。真实服务器地址、MQTT
+密码和工具路径只放在被 Git 忽略的 `local.properties`。不要把密码、Token、JKS 或
+Base64 提交到仓库。
 
 ## 构建与验证
 
 ```powershell
 .\tools\run-gradle.ps1 testDebugUnitTest lintDebug assembleDebug
 ```
+
+这是交接时的最小复现命令。`assembleRelease` 还需要固定 JKS 和四个签名变量，发布到 Cloud
+还需要 App 发布 Token；这些材料不在 GitHub 中。
 
 Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进程。首次创建或验证签名库：
 
@@ -64,6 +88,36 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 [debug](https://47.103.157.213/downloads/app/debug)。浏览器入口支持公开 `GET`/`HEAD`；
 `stable` 当前尚未发布。APK 上传、App 登录和业务 API 仍需要各自凭据。
 
+## GitHub Actions 发布复现
+
+仓库工作流 `.github/workflows/publish-app.yml` 需要以下 GitHub Secrets：
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+- `API_BASE_URL`
+- `APP_RELEASE_BASE_URL`
+- `APP_RELEASE_UPLOAD_TOKEN`
+- `MQTT_HOST`
+- `MQTT_PORT`
+- `MQTT_USERNAME`
+- `MQTT_PASSWORD`
+
+普通 `feature/*` 或 `develop` 的 App/Gradle 代码变更发布 `test`；标签构建发布 `stable`；
+`workflow_dispatch` 可选择 `debug`、`test` 或 `stable`。文档、history 和模拟器脚本变更不会
+自动发布。首次接手时先核对 Secrets 名称和签名证书 SHA-256，不要在日志中打印值。
+
+## GitHub 无法提供的内容
+
+- 固定 Release JKS、签名密码和 DPAPI 文件；
+- App/Robot MQTT 密码、测试账号密码和 App 发布 Token；
+- Android SDK、JDK、ADB、模拟器和 Mosquitto 的本机安装；
+- 已安装设备状态、服务器数据库和 Robot 实机证据。
+
+这些内容通过工作区同级 `import-message/` 私下交接，收到后应迁移到接收人自己的安全存储，
+并按需要轮换凭据。
+
 ## 协作边界
 
 - App 当前状态：[docs/project-status.md](docs/project-status.md)
@@ -75,3 +129,13 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 - Robot 硬件交接与联调基线：`HS678/robot-integration`
 
 未经 Robot/Cloud/App 真实链路联调的 feature 不得合入 `develop`。
+
+## 分支规范
+
+- `main`：稳定发布；
+- `develop`：日常集成；
+- `feature/*`：功能开发，经 PR 合入 `develop`；
+- 当前联调分支：`feature/app-update-channel`。
+
+详细分支、PR、标签和联合发布规范见 `HS678/robot-integration` 的
+`docs/git-workflow.md`。
