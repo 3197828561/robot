@@ -3,6 +3,9 @@
 本清单用于把一个 App 提交从“代码完成”推进到“测试包可交付”和“三方联调通过”。产品要求
 见 [正式化产品需求](requirements/app-formalization-product-requirements.md)。
 
+当前状态（2026-10-12）：`debug`/`test` 已发布，`stable` 尚未发布；Robot 实机联合证据
+仍未齐，因此合入 `develop` 和稳定渠道的门禁仍未通过。
+
 ## 1. App 开发交付
 
 每次交付必须同时提供：

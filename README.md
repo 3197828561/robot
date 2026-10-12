@@ -4,6 +4,9 @@
 
 云服务代码和运维文档在 `cloud-server` 仓库；Robot 硬件交接、`map_planner` 参考源码、联调样例和跨仓库基线在 `robot-integration` 仓库。
 
+当前联调分支为 `feature/app-update-channel`。2026-10-12 文档同步时，最新 App/CI
+实现基线为 `e968220`；本次同步只更新文档，不改变 APK 或运行行为。
+
 ## 当前需求基线
 
 - 基础 UI、账号、设备和通用接口：V3 未被后续覆盖的部分；
@@ -48,6 +51,7 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 
 ## App 更新渠道
 
+- `debug`：与 `test` 并存的控制门禁对照包；
 - `test`：feature 联调包；
 - `stable`：完成实机联调后的稳定包。
 
@@ -56,7 +60,9 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 .\tools\publish-test-app.ps1
 ```
 
-测试人员可直接下载：<https://47.103.157.213/downloads/app/test>。测试 APK 的浏览器入口支持公开 `GET`/`HEAD`；APK 上传、App 登录和业务 API 仍需要各自凭据。
+测试人员可直接下载 [test](https://47.103.157.213/downloads/app/test) 或
+[debug](https://47.103.157.213/downloads/app/debug)。浏览器入口支持公开 `GET`/`HEAD`；
+`stable` 当前尚未发布。APK 上传、App 登录和业务 API 仍需要各自凭据。
 
 ## 协作边界
 

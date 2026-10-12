@@ -1,5 +1,8 @@
 # App 文档索引
 
+当前文档核验日期：2026-10-12。当前实现分支为 `feature/app-update-channel`，同步前实现
+基线为 `e968220`。`requirements/` 中的版本文档是需求演进原文，不因当前状态同步而改写。
+
 `robot` 仓库的文档范围限定为 App 需求和 App 实现记录。云服务部署文档归 `cloud-server`，Robot 硬件交接和跨仓库联调记录归 `robot-integration`。
 
 ## `requirements/`
