@@ -6,7 +6,7 @@ sdk.dir=C:/path/to/Android/Sdk
 api.base.url=https://47.103.157.213/api
 app.update.channel=test
 
-# App 发布签名配置；密码位于同级 import-message/app-signing/release-signing-secrets.env
+# App 发布签名配置；密码仅保存到忽略目录 .local-tools/signing/release-signing-secrets.env
 android.keystore.file=.local-tools/signing/robot-release.jks
 android.key.alias=robot-app
 

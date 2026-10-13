@@ -57,9 +57,8 @@ if (!$env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT = $androidHome }
 $gradleWrapper = Join-Path $RepoRoot "gradlew.bat"
 $signingDirectory = Join-Path $RepoRoot ".local-tools\signing"
 $keystorePath = Join-Path $signingDirectory "robot-release.jks"
-$handoffRoot = Join-Path $RepoRoot "..\import-message"
-$signingEnvPath = Join-Path $handoffRoot "app-signing\release-signing-secrets.env"
-$runtimeEnvPath = Join-Path $handoffRoot "app\config\app-runtime.env"
+$signingEnvPath = Join-Path $signingDirectory "release-signing-secrets.env"
+$runtimeEnvPath = Join-Path $RepoRoot ".local-tools\config\app-runtime.env"
 $savedEnvironment = @{}
 
 function Set-ProcessValue([string]$Name, [string]$Value) {

@@ -33,7 +33,7 @@ function New-RobotMqttContext {
 
     $repoRoot = Resolve-Path (Join-Path $ScriptDirectory "..\..")
     if (!$DeviceConfig) {
-        $DeviceConfig = Join-Path $repoRoot "..\import-message\robot-handoff\robot-device-secrets.json"
+        $DeviceConfig = Join-Path $repoRoot ".local-tools\config\robot-device-secrets.json"
     }
 
     $config = $null

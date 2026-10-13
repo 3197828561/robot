@@ -1,7 +1,7 @@
 # Robot MQTT 测试脚本
 
-本目录保留三个单一职责的测试入口。它们默认读取工作区同级
-`import-message/robot-handoff/robot-device-secrets.json`，并通过 `MOSQUITTO_DIR`、PATH
+本目录保留三个单一职责的测试入口。它们默认读取仓库内被忽略的
+`.local-tools/config/robot-device-secrets.json`，并通过 `MOSQUITTO_DIR`、PATH
 或 `-MosquittoDir` 定位 Mosquitto 客户端。
 
 ## 1. 主页：机器人在线

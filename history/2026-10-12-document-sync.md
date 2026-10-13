@@ -9,8 +9,8 @@
   交接边界；
 - 修正 `local.properties.example`，补入缺失的 `sdk.dir` 并让 MQTT 密码默认留空。
 - 删除 Windows 用户绑定的 DPAPI `.clixml` 配置；
-- `run-gradle.ps1`、签名和发布工具改为直接读取同级 `import-message/` 的明文 `.env`，
-  使整个工作区复制到另一台 Windows 电脑后无需重新生成本机加密文件。
+- `run-gradle.ps1`、签名和发布工具读取仓库内被忽略的 `.local-tools/config/` 与
+  `.local-tools/signing/` 明文配置，使仓库单独克隆后不依赖固定父目录结构。
 
 ## 当前基线
 

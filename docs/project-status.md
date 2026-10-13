@@ -58,8 +58,8 @@
 - 功能、页面和验收责任：[app-handoff.md](app-handoff.md)
 - 需求文档：`docs/requirements/`
 - App 构建与测试：仓库根目录 `README.md`
-- Cloud API 与部署：`cloud-server` 仓库
-- Robot MQTT/ROS 和联合验收：`robot-integration` 仓库
+- Cloud 责任边界：提供本文记录的 HTTPS API、认证、Map V2 和 App 发布接口，并给出可用环境与回退点
+- Robot 责任边界：实现本文记录的 MQTT/Map 合约并提交真实硬件动作、遥测和安全证据
 
 ## 回退
 

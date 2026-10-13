@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $signingDirectory = Join-Path $repoRoot ".local-tools\signing"
 $keystorePath = Join-Path $signingDirectory "robot-release.jks"
-$signingEnvPath = Join-Path $repoRoot "..\import-message\app-signing\release-signing-secrets.env"
+$signingEnvPath = Join-Path $signingDirectory "release-signing-secrets.env"
 
 function Read-EnvFile([string]$Path) {
     $values = @{}

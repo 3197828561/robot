@@ -2,10 +2,8 @@
 
 光伏清洁机器人 Android 客户端。本仓库只保留 App 代码、App 测试、V1–V6 需求原文和 App 侧实现记录。
 
-云服务代码和运维文档在 `cloud-server` 仓库；Robot 硬件交接、`map_planner` 参考源码、联调样例和跨仓库基线在 `robot-integration` 仓库。
-
-当前联调分支为 `feature/app-update-channel`。2026-10-12 文档同步时，最新 App/CI
-实现基线为 `e968220`；本次同步只更新文档，不改变 APK 或运行行为。
+本仓库可以独立克隆、配置、测试和构建，不要求与任何其他仓库放在同一父目录。当前联调分支
+为 `feature/app-update-channel`；准确版本以该远端分支 HEAD 为准。
 
 ## 当前需求基线
 
@@ -57,11 +55,24 @@ Emulator 从 Android SDK 派生，Mosquitto 使用 `MOSQUITTO_DIR`、PATH 或脚
 .\tools\run-gradle.ps1 testDebugUnitTest lintDebug assembleDebug
 ```
 
-成功后 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。如果某个 API/MQTT 键
-未写入 `local.properties`，完整工作区会从同级
-`import-message/app/config/app-runtime.env` 补充；GitHub Actions 使用仓库 Secrets。
-不要把 `local.properties`、密码、Token、JKS 或 Base64 提交到仓库。测试登录账号的交接
-来源为同级 `import-message/tester/app-login.env`。
+成功后 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。API/MQTT 构建值优先读取
+`local.properties`；缺失值可由仓库内被忽略的 `.local-tools/config/app-runtime.env` 补充。
+GitHub Actions 使用仓库 Secrets。不要把 `local.properties`、密码、Token、JKS 或 Base64
+提交到仓库。测试账号由负责人通过受控渠道单独提供，开发者只在本机密码管理器或忽略文件中保存。
+
+可选的 `.local-tools/config/app-runtime.env` 格式如下；只在相应键未写入
+`local.properties` 时作为补充：
+
+```dotenv
+API_BASE_URL=https://example.com/api
+APP_RELEASE_BASE_URL=https://example.com
+MQTT_HOST=mqtt.example.com
+MQTT_PORT=1883
+MQTT_USERNAME=replace-me
+MQTT_PASSWORD=replace-me
+MQTT_PRODUCT_TYPE=crawler
+MQTT_DEFAULT_DEVICE_ID=crawler_00000001
+```
 
 ## 构建与验证
 
@@ -72,12 +83,21 @@ Emulator 从 Android SDK 派生，Mosquitto 使用 `MOSQUITTO_DIR`、PATH 或脚
 这是交接时的最小复现命令。`assembleRelease` 还需要固定 JKS 和四个签名变量，发布到 Cloud
 还需要 App 发布 Token；这些材料不在 GitHub 中。
 
-Release 签名参数明文保存在工作区同级
-`import-message/app-signing/release-signing-secrets.env`，不再使用 Windows DPAPI，换电脑后可直接读取。
-首次创建或验证签名库：
+Release 签名库放在 `.local-tools/signing/robot-release.jks`，参数放在
+`.local-tools/signing/release-signing-secrets.env`；两者均被 Git 忽略。负责人通过受控渠道
+单独交付固定签名材料后，开发者将文件放到上述位置。首次创建或验证签名库：
 
 ```powershell
 .\tools\create-release-keystore.ps1
+```
+
+签名参数文件格式：
+
+```dotenv
+ANDROID_KEYSTORE_FILE=robot-release.jks
+ANDROID_KEYSTORE_PASSWORD=replace-me
+ANDROID_KEY_ALIAS=robot-app
+ANDROID_KEY_PASSWORD=replace-me
 ```
 
 ## App 更新渠道
@@ -89,6 +109,16 @@ Release 签名参数明文保存在工作区同级
 ```powershell
 .\tools\configure-distribution-secrets.ps1
 .\tools\publish-test-app.ps1
+```
+
+`configure-distribution-secrets.ps1` 会在忽略目录生成
+`.local-tools/config/distribution-secrets.env`，格式为：
+
+```dotenv
+MQTT_PASSWORD=replace-me
+APP_RELEASE_UPLOAD_TOKEN=replace-me
+APP_DOWNLOAD_USERNAME=replace-me
+APP_DOWNLOAD_PASSWORD=replace-me
 ```
 
 测试人员可直接下载 [test](https://47.103.157.213/downloads/app/test) 或
@@ -124,8 +154,8 @@ Release 签名参数明文保存在工作区同级
 - Android SDK、JDK、ADB、模拟器和 Mosquitto 的本机安装；
 - 已安装设备状态、服务器数据库和 Robot 实机证据。
 
-这些内容通过工作区同级 `import-message/` 一并交接；当前开发阶段使用明文配置文件，不要求在
-新 Windows 电脑重新生成本机加密文件。
+这些内容由相应负责人通过受控渠道单独交付，不属于本仓库，也不要求位于本仓库相邻目录。
+本地明文配置只能保存到 Git 已忽略的位置，并应限制文件访问权限。
 
 ## 协作边界
 
@@ -134,10 +164,11 @@ Release 签名参数明文保存在工作区同级
 - App 正式化产品需求：[docs/requirements/app-formalization-product-requirements.md](docs/requirements/app-formalization-product-requirements.md)
 - App 正式交付清单：[docs/app-delivery-checklist.md](docs/app-delivery-checklist.md)
 - 需求与文档索引：[docs/README.md](docs/README.md)
-- Cloud 部署与 API：`HS678/cloud-server`
-- Robot 硬件交接与联调基线：`HS678/robot-integration`
-
-未经 Robot/Cloud/App 真实链路联调的 feature 不得合入 `develop`。
+- Cloud 合约：HTTPS API 基址通过 `api.base.url`/`API_BASE_URL` 配置；更新检查使用
+  `/api/app-releases/{channel}/latest`；详细请求和字段已完整记录在本仓库 `docs/app-readme/`。
+- Robot 合约：MQTT Topic、QoS、payload、Map V2 和实机验收要求已完整记录在
+  `docs/app-handoff.md`、`docs/app-readme/field-mapping.md` 与 `docs/requirements/`。
+- 未取得 Robot、Cloud、MQTT 和 App 真实链路证据的 feature 不得合入 `develop`。
 
 ## 分支规范
 
@@ -146,5 +177,6 @@ Release 签名参数明文保存在工作区同级
 - `feature/*`：功能开发，经 PR 合入 `develop`；
 - 当前联调分支：`feature/app-update-channel`。
 
-详细分支、PR、标签和联合发布规范见 `HS678/robot-integration` 的
-`docs/git-workflow.md`。
+开发者从 `develop` 创建 `feature/<topic>`，推送后只运行 CI；通过评审和联调后以 PR 合入
+`develop`，由 `develop` 自动发布 test。稳定版本从 `main` 上已包含的提交创建 `v*` 标签；
+debug 仅允许手动发布。禁止直接在功能分支生成 stable。

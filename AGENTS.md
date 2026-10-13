@@ -4,7 +4,7 @@
 - Resolve JDK from `JAVA_HOME`; Android SDK may use standard `sdk.dir` or `ANDROID_HOME`/`ANDROID_SDK_ROOT`.
 - Run Gradle through `tools/run-gradle.ps1`; it may use the ignored project-local JDK as a fallback.
 - Robot simulator scripts resolve Mosquitto from `MOSQUITTO_DIR`, PATH, or `-MosquittoDir`.
-- Transferable development and release values live in the sibling `import-message/` plaintext `.env`/JSON files; never print their values.
+- Transferable development and release values must be supplied explicitly, then stored only under the ignored repository-local `.local-tools/config/` and `.local-tools/signing/` paths; never assume a sibling workspace or print secret values.
 - Project-local binaries belong under the ignored `.local-tools/` directory.
 
 ## Token-efficient builds and releases

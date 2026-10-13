@@ -6,9 +6,9 @@ param(
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $keystorePath = Join-Path $repoRoot ".local-tools\signing\robot-release.jks"
-$signingEnvPath = Join-Path $repoRoot "..\import-message\app-signing\release-signing-secrets.env"
-$runtimeEnvPath = Join-Path $repoRoot "..\import-message\app\config\app-runtime.env"
-$distributionEnvPath = Join-Path $repoRoot "..\import-message\app\config\distribution-secrets.env"
+$signingEnvPath = Join-Path $repoRoot ".local-tools\signing\release-signing-secrets.env"
+$runtimeEnvPath = Join-Path $repoRoot ".local-tools\config\app-runtime.env"
+$distributionEnvPath = Join-Path $repoRoot ".local-tools\config\distribution-secrets.env"
 $projectGh = Join-Path $repoRoot ".local-tools\gh\bin\gh.exe"
 $installedGh = Join-Path $env:ProgramFiles "GitHub CLI\gh.exe"
 $gh = if (Test-Path $projectGh) { $projectGh } elseif (Test-Path $installedGh) { $installedGh } else { (Get-Command gh -ErrorAction SilentlyContinue).Source }
