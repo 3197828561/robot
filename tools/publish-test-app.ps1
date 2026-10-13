@@ -8,26 +8,22 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectGh = Join-Path $repoRoot ".local-tools\gh\bin\gh.exe"
 $installedGh = Join-Path $env:ProgramFiles "GitHub CLI\gh.exe"
 $gh = if (Test-Path $projectGh) { $projectGh } elseif (Test-Path $installedGh) { $installedGh } else { (Get-Command gh -ErrorAction SilentlyContinue).Source }
-$signingPath = Join-Path $repoRoot ".local-tools\signing\release-secrets.clixml"
+$signingPath = Join-Path $repoRoot "..\import-message\app-signing\release-signing-secrets.env"
 $keystorePath = Join-Path $repoRoot ".local-tools\signing\robot-release.jks"
-$distributionPath = Join-Path $repoRoot ".local-tools\secrets\distribution-secrets.clixml"
-$propertiesPath = Join-Path $repoRoot "local.properties"
+$distributionPath = Join-Path $repoRoot "..\import-message\app\config\distribution-secrets.env"
+$localPropertiesPath = Join-Path $repoRoot "local.properties"
 $verificationDirectory = Join-Path $repoRoot ".local-tools\verification"
 $apkPath = Join-Path $verificationDirectory "latest-test.apk"
 
-function Convert-SecureToPlainText([Security.SecureString]$Value) {
-    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Value)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
-}
-
-function Read-Property([string]$Name) {
-    foreach ($line in Get-Content -LiteralPath $propertiesPath -Encoding UTF8) {
-        if ($line -match "^$([regex]::Escape($Name))=(.+)$") {
-            return $matches[1].Trim().Trim('"').Replace('\:', ':').Replace('\\', '\')
-        }
+function Read-EnvFile([string]$Path) {
+    $values = @{}
+    foreach ($rawLine in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        $line = $rawLine.Trim()
+        if (!$line -or $line.StartsWith("#")) { continue }
+        $index = $line.IndexOf("=")
+        if ($index -gt 0) { $values[$line.Substring(0, $index).Trim()] = $line.Substring($index + 1).Trim().Trim('"') }
     }
-    return $null
+    return $values
 }
 
 if (!$gh) { throw "缺少 GitHub CLI。" }
@@ -59,24 +55,33 @@ Write-Host "GitHub Actions run $($run.databaseId) 已触发，等待测试、签
 & $gh run watch $run.databaseId --repo $Repository --exit-status
 if ($LASTEXITCODE -ne 0) { throw "GitHub Actions 发布失败，请查看 run $($run.databaseId)。" }
 
-$distribution = Import-Clixml -LiteralPath $distributionPath
+$distribution = Read-EnvFile $distributionPath
 New-Item -ItemType Directory -Force -Path $verificationDirectory | Out-Null
-$credential = [Management.Automation.PSCredential]::new(
-    $distribution.AppDownloadUsername,
-    $distribution.AppDownloadPassword
-)
+$basicBytes = [Text.Encoding]::UTF8.GetBytes("$($distribution.APP_DOWNLOAD_USERNAME):$($distribution.APP_DOWNLOAD_PASSWORD)")
+$headers = @{ Authorization = "Basic $([Convert]::ToBase64String($basicBytes))" }
 Invoke-WebRequest -Uri "https://47.103.157.213/downloads/app/test" `
-    -Authentication Basic -Credential $credential -OutFile $apkPath -UseBasicParsing
+    -Headers $headers -OutFile $apkPath -UseBasicParsing
 
-$sdkDirectory = Read-Property "sdk.dir"
-if (!$sdkDirectory) { throw "local.properties 缺少 sdk.dir。" }
+$localProperties = Read-EnvFile $localPropertiesPath
+$localSdk = $localProperties["sdk.dir"]
+if ($localSdk) { $localSdk = $localSdk.Replace('\:', ':').Replace('\\', '\') }
+$sdkDirectory = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { $localSdk }
+if (!$sdkDirectory -or !(Test-Path -LiteralPath $sdkDirectory)) {
+    throw "未找到 Android SDK；请配置 local.properties 的 sdk.dir 或 Windows ANDROID_HOME。"
+}
 $buildTools = Get-ChildItem -LiteralPath (Join-Path $sdkDirectory "build-tools") -Directory |
     Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
 $apkSigner = Join-Path $buildTools.FullName "apksigner.bat"
 if (!(Test-Path $apkSigner)) { throw "未找到 apksigner。" }
 
-$javaHome = Read-Property "java.home"
-if (!$javaHome) { throw "local.properties 缺少 java.home。" }
+$javaHome = $env:JAVA_HOME
+if (!$javaHome -or !(Test-Path -LiteralPath (Join-Path $javaHome "bin\keytool.exe"))) {
+    $bundledJdk = Get-ChildItem -LiteralPath (Join-Path $repoRoot ".local-tools") -Directory -Filter "jdk-*" -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "bin\keytool.exe") } |
+        Sort-Object Name -Descending | Select-Object -First 1
+    if ($bundledJdk) { $javaHome = $bundledJdk.FullName }
+}
+if (!$javaHome) { throw "未找到 JDK；请配置 Windows JAVA_HOME。" }
 $previousJavaHome = $env:JAVA_HOME
 $env:JAVA_HOME = $javaHome
 try {
@@ -90,13 +95,13 @@ if (!$apkDigestLine) { throw "无法读取 APK 签名证书摘要。" }
 $null = $apkDigestLine -match 'certificate SHA-256 digest:\s*([0-9a-fA-F]+)'
 $apkDigest = $matches[1].ToLowerInvariant()
 
-$signing = Import-Clixml -LiteralPath $signingPath
-$storePassword = Convert-SecureToPlainText $signing.StorePassword
+$signing = Read-EnvFile $signingPath
+$storePassword = $signing.ANDROID_KEYSTORE_PASSWORD
 $certificatePath = Join-Path $verificationDirectory "release-cert.der"
 $keytool = Join-Path $javaHome "bin\keytool.exe"
 $env:ROBOT_STORE_PASSWORD = $storePassword
 try {
-    & $keytool -exportcert -keystore $keystorePath -alias $signing.Alias `
+    & $keytool -exportcert -keystore $keystorePath -alias $signing.ANDROID_KEY_ALIAS `
         -storepass:env ROBOT_STORE_PASSWORD -file $certificatePath *> $null
     if ($LASTEXITCODE -ne 0) { throw "无法导出本地发布证书进行比对。" }
     $localDigest = (Get-FileHash -LiteralPath $certificatePath -Algorithm SHA256).Hash.ToLowerInvariant()

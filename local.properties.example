@@ -2,17 +2,11 @@
 # Android SDK 路径由 Android Studio 自动维护，请勿删除 sdk.dir
 sdk.dir=C:/path/to/Android/Sdk
 
-# 本机开发工具（建议使用正斜杠；路径只保存在 local.properties，不提交）
-java.home=C:/path/to/jdk-21
-mqtt.client.dir=C:/path/to/mosquitto
-adb.path=C:/path/to/Android/Sdk/platform-tools/adb.exe
-emulator.path=C:/path/to/Android/Sdk/emulator/emulator.exe
-
 # HTTP API（当前阿里云 ECS）
 api.base.url=https://47.103.157.213/api
 app.update.channel=test
 
-# App 发布签名的非敏感配置；密码由 create-release-keystore.ps1 使用 DPAPI 加密保存
+# App 发布签名配置；密码位于同级 import-message/app-signing/release-signing-secrets.env
 android.keystore.file=.local-tools/signing/robot-release.jks
 android.key.alias=robot-app
 
@@ -26,3 +20,7 @@ mqtt.password=
 # 联调默认设备标识（设备列表未选时 fallback，正式流程从 HTTP 设备列表选择）
 mqtt.product_type=crawler
 mqtt.default_device_id=crawler_00000001
+
+# App 测试登录账号（仅本地开发/交接记录，不会编译进 APK）
+app.login.email=
+app.login.password=

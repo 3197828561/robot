@@ -2,25 +2,31 @@ param([string]$Alias = "robot-app")
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$propertiesPath = Join-Path $repoRoot "local.properties"
 $signingDirectory = Join-Path $repoRoot ".local-tools\signing"
 $keystorePath = Join-Path $signingDirectory "robot-release.jks"
-$secretsPath = Join-Path $signingDirectory "release-secrets.clixml"
+$signingEnvPath = Join-Path $repoRoot "..\import-message\app-signing\release-signing-secrets.env"
 
-function Convert-SecureToPlainText([Security.SecureString]$Value) {
-    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Value)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+function Read-EnvFile([string]$Path) {
+    $values = @{}
+    if (!(Test-Path -LiteralPath $Path)) { return $values }
+    foreach ($rawLine in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        $line = $rawLine.Trim()
+        if (!$line -or $line.StartsWith("#")) { continue }
+        $index = $line.IndexOf("=")
+        if ($index -gt 0) { $values[$line.Substring(0, $index).Trim()] = $line.Substring($index + 1).Trim().Trim('"') }
+    }
+    return $values
 }
 
 function Resolve-Keytool {
     $javaHome = $env:JAVA_HOME
-    if (Test-Path -LiteralPath $propertiesPath) {
-        foreach ($line in Get-Content -LiteralPath $propertiesPath -Encoding UTF8) {
-            if ($line -match '^java\.home=(.+)$') { $javaHome = $matches[1].Trim().Trim('"') }
-        }
+    if (!$javaHome -or !(Test-Path -LiteralPath (Join-Path $javaHome "bin\keytool.exe"))) {
+        $bundled = Get-ChildItem -LiteralPath (Join-Path $repoRoot ".local-tools") -Directory -Filter "jdk-*" -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "bin\keytool.exe") } |
+            Sort-Object Name -Descending | Select-Object -First 1
+        if ($bundled) { $javaHome = $bundled.FullName }
     }
-    if (!$javaHome) { throw "未找到 JDK；请先在 local.properties 配置 java.home。" }
+    if (!$javaHome) { throw "未找到 JDK；请配置 Windows JAVA_HOME。" }
     $candidate = Join-Path $javaHome "bin\keytool.exe"
     if (!(Test-Path -LiteralPath $candidate)) { throw "未找到 keytool：$candidate" }
     return $candidate
@@ -40,26 +46,21 @@ function Test-Keystore($keytool, $storePassword, $keyPassword, $keyAlias) {
 
 $keytool = Resolve-Keytool
 New-Item -ItemType Directory -Force -Path $signingDirectory | Out-Null
+$signing = Read-EnvFile $signingEnvPath
 
-if ((Test-Path -LiteralPath $keystorePath) -and (Test-Path -LiteralPath $secretsPath)) {
-    $saved = Import-Clixml -LiteralPath $secretsPath
-    $storePassword = Convert-SecureToPlainText $saved.StorePassword
-    $keyPassword = Convert-SecureToPlainText $saved.KeyPassword
-    try { Test-Keystore $keytool $storePassword $keyPassword $saved.Alias }
-    finally { $storePassword = $null; $keyPassword = $null }
-    Write-Host "已有签名库与 DPAPI 加密配置验证通过，未覆盖任何文件。"
+if ((Test-Path -LiteralPath $keystorePath) -and $signing.Count -gt 0) {
+    Test-Keystore $keytool $signing.ANDROID_KEYSTORE_PASSWORD $signing.ANDROID_KEY_PASSWORD $signing.ANDROID_KEY_ALIAS
+    Write-Host "已有签名库与明文签名配置验证通过，未覆盖任何文件。"
     exit 0
 }
 
-if ((Test-Path -LiteralPath $secretsPath) -and !(Test-Path -LiteralPath $keystorePath)) {
-    throw "发现加密配置但签名库缺失。请从离线备份恢复 robot-release.jks，脚本不会自动创建新密钥覆盖身份。"
+if ($signing.Count -gt 0 -and !(Test-Path -LiteralPath $keystorePath)) {
+    throw "发现签名配置但签名库缺失。请恢复 robot-release.jks，脚本不会自动创建新密钥覆盖身份。"
 }
 
 $isExisting = Test-Path -LiteralPath $keystorePath
-$storeSecure = Read-Host $(if ($isExisting) { "输入现有签名库密码" } else { "输入新的签名库密码（至少 12 位）" }) -AsSecureString
-$keySecure = Read-Host $(if ($isExisting) { "输入现有签名密钥密码" } else { "输入新的签名密钥密码（至少 12 位）" }) -AsSecureString
-$storePassword = Convert-SecureToPlainText $storeSecure
-$keyPassword = Convert-SecureToPlainText $keySecure
+$storePassword = Read-Host $(if ($isExisting) { "输入现有签名库密码" } else { "输入新的签名库密码（至少 12 位）" })
+$keyPassword = Read-Host $(if ($isExisting) { "输入现有签名密钥密码" } else { "输入新的签名密钥密码（至少 12 位）" })
 try {
     if ($storePassword.Length -lt 12 -or $keyPassword.Length -lt 12) { throw "密码长度必须至少为 12 位。" }
     if ($isExisting) {
@@ -78,17 +79,14 @@ try {
         }
     }
 
-    $encrypted = [pscustomobject]@{
-        SchemaVersion = 1
-        Alias = $Alias
-        StorePassword = $storeSecure
-        KeyPassword = $keySecure
-    }
-    $temporary = "$secretsPath.tmp"
-    $encrypted | Export-Clixml -LiteralPath $temporary -Depth 3
-    Move-Item -LiteralPath $temporary -Destination $secretsPath
-    Write-Host "签名库已验证；密码已通过 Windows DPAPI 加密保存，仅当前 Windows 用户可解密。"
-    Write-Host "请离线备份：$keystorePath"
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $signingEnvPath) | Out-Null
+    @(
+        "ANDROID_KEYSTORE_FILE=robot-release.jks"
+        "ANDROID_KEYSTORE_PASSWORD=$storePassword"
+        "ANDROID_KEY_ALIAS=$Alias"
+        "ANDROID_KEY_PASSWORD=$keyPassword"
+    ) | Set-Content -LiteralPath $signingEnvPath -Encoding UTF8
+    Write-Host "签名库已验证；签名参数已明文保存到：$signingEnvPath"
 } finally {
     Remove-Item Env:ROBOT_STORE_PASSWORD,Env:ROBOT_KEY_PASSWORD -ErrorAction SilentlyContinue
     $storePassword = $null

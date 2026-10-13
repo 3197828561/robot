@@ -1,7 +1,8 @@
 # Robot MQTT 测试脚本
 
-本目录保留三个单一职责的测试入口。它们默认读取项目根目录中已被Git忽略的
-`local.properties`，并通过 `mqtt.client.dir` 自动定位Mosquitto客户端。
+本目录保留三个单一职责的测试入口。它们默认读取工作区同级
+`import-message/robot-handoff/robot-device-secrets.json`，并通过 `MOSQUITTO_DIR`、PATH
+或 `-MosquittoDir` 定位 Mosquitto 客户端。
 
 ## 1. 主页：机器人在线
 
@@ -49,20 +50,22 @@ powershell -ExecutionPolicy Bypass -File tools\robot-sim\robot-manual-mode.ps1
 
 ## 配置
 
-脚本读取以下本地配置，但不会打印密码：
+默认设备配置文件格式如下，脚本不会打印密码：
 
-```properties
-mqtt.client.dir=C:/path/to/mosquitto
-mqtt.host=your-broker
-mqtt.port=1883
-mqtt.robot.username=robot-account
-mqtt.robot.password=robot-password
-mqtt.product_type=crawler
-mqtt.default_device_id=crawler_00000001
+```json
+{
+  "mqtt": {
+    "host": "your-broker",
+    "port": 1883,
+    "username": "robot-account",
+    "password": "robot-password",
+    "productType": "crawler",
+    "deviceId": "crawler_00000001"
+  }
+}
 ```
 
-账号优先使用 `mqtt.robot.username/password`，缺少时回退到
-`mqtt.username/password`。命令行的 `*Override` 参数优先级最高。
+可用 `-DeviceConfig` 指向其他 JSON 文件。命令行的 `*Override` 参数优先级最高。
 
 启动后显示的设备类型和设备ID必须与App当前选中的设备一致。
 

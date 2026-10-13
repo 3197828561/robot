@@ -1,6 +1,6 @@
 param(
     [string]$MosquittoDir = "",
-    [string]$LocalProperties = "local.properties",
+    [string]$DeviceConfig = "",
     [string]$HostNameOverride = "",
     [string]$PortOverride = "",
     [string]$UsernameOverride = "",
@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 if ($MaxMessages -lt 0) { throw "MaxMessages cannot be negative." }
 
 $context = New-RobotMqttContext -ScriptDirectory $PSScriptRoot `
-    -MosquittoDir $MosquittoDir -LocalProperties $LocalProperties `
+    -MosquittoDir $MosquittoDir -DeviceConfig $DeviceConfig `
     -HostNameOverride $HostNameOverride -PortOverride $PortOverride `
     -UsernameOverride $UsernameOverride -PasswordOverride $PasswordOverride `
     -ProductTypeOverride $ProductTypeOverride -DeviceIdOverride $DeviceIdOverride

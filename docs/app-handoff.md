@@ -40,7 +40,7 @@
 
 - 当前分支和提交、构建命令、测试结果、APK版本和签名一致性；
 - 页面操作与 MQTT/HTTP 请求的对应关系；
-- 不提交 `local.properties`、密码、Token、JKS 或 Base64；
+- 不在仓库记录本机工具路径，不提交密码、Token、JKS 或 Base64；
 - 提供失败提示、日志位置和可回退提交。
 
 ### Cloud

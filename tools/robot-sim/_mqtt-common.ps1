@@ -1,38 +1,5 @@
 Set-StrictMode -Version Latest
 
-function Read-LocalProperties {
-    param([string]$Path)
-
-    $properties = @{}
-    if (!(Test-Path -LiteralPath $Path)) { return $properties }
-
-    foreach ($rawLine in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
-        $line = $rawLine.Trim()
-        if (!$line -or $line.StartsWith("#")) { continue }
-        $separator = $line.IndexOf("=")
-        if ($separator -le 0) { continue }
-        $key = $line.Substring(0, $separator).Trim()
-        $value = $line.Substring($separator + 1).Trim().Trim('"')
-        $properties[$key] = $value
-    }
-    return $properties
-}
-
-function Get-LocalProperty {
-    param(
-        [hashtable]$Properties,
-        [string[]]$Keys,
-        [string]$Default = ""
-    )
-
-    foreach ($key in $Keys) {
-        if ($Properties.ContainsKey($key) -and $Properties[$key]) {
-            return $Properties[$key]
-        }
-    }
-    return $Default
-}
-
 function Resolve-MqttExecutable {
     param(
         [string]$MosquittoDir,
@@ -48,14 +15,14 @@ function Resolve-MqttExecutable {
         $command = Get-Command $name -ErrorAction SilentlyContinue | Select-Object -First 1
         if ($command) { return $command.Source }
     }
-    throw "Cannot find $FileName. Configure mqtt.client.dir in local.properties or pass -MosquittoDir."
+    throw "Cannot find $FileName. Configure MOSQUITTO_DIR, add Mosquitto to PATH, or pass -MosquittoDir."
 }
 
 function New-RobotMqttContext {
     param(
         [string]$ScriptDirectory,
         [string]$MosquittoDir = "",
-        [string]$LocalProperties = "local.properties",
+        [string]$DeviceConfig = "",
         [string]$HostNameOverride = "",
         [string]$PortOverride = "",
         [string]$UsernameOverride = "",
@@ -65,22 +32,29 @@ function New-RobotMqttContext {
     )
 
     $repoRoot = Resolve-Path (Join-Path $ScriptDirectory "..\..")
-    if ($LocalProperties -eq "local.properties") {
-        $LocalProperties = Join-Path $repoRoot "local.properties"
-    }
-    $properties = Read-LocalProperties $LocalProperties
-    $resolvedMosquittoDir = if ($MosquittoDir) {
-        $MosquittoDir
-    } else {
-        Get-LocalProperty $properties @("mqtt.client.dir", "mosquitto.dir") "C:\Program Files\Mosquitto"
+    if (!$DeviceConfig) {
+        $DeviceConfig = Join-Path $repoRoot "..\import-message\robot-handoff\robot-device-secrets.json"
     }
 
-    $hostName = if ($HostNameOverride) { $HostNameOverride } else { Get-LocalProperty $properties @("mqtt.host") "127.0.0.1" }
-    $port = if ($PortOverride) { $PortOverride } else { Get-LocalProperty $properties @("mqtt.port") "1883" }
-    $username = if ($UsernameOverride) { $UsernameOverride } else { Get-LocalProperty $properties @("mqtt.robot.username", "mqtt.username") "" }
-    $password = if ($PasswordOverride) { $PasswordOverride } else { Get-LocalProperty $properties @("mqtt.robot.password", "mqtt.password") "" }
-    $productType = if ($ProductTypeOverride) { $ProductTypeOverride } else { Get-LocalProperty $properties @("mqtt.product_type") "crawler" }
-    $deviceId = if ($DeviceIdOverride) { $DeviceIdOverride } else { Get-LocalProperty $properties @("mqtt.default_device_id") "crawler_00000001" }
+    $config = $null
+    if (Test-Path -LiteralPath $DeviceConfig) {
+        $config = Get-Content -LiteralPath $DeviceConfig -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+
+    $resolvedMosquittoDir = if ($MosquittoDir) {
+        $MosquittoDir
+    } elseif ($env:MOSQUITTO_DIR) {
+        $env:MOSQUITTO_DIR
+    } else {
+        "C:\Program Files\Mosquitto"
+    }
+
+    $hostName = if ($HostNameOverride) { $HostNameOverride } elseif ($config) { [string]$config.mqtt.host } else { "127.0.0.1" }
+    $port = if ($PortOverride) { $PortOverride } elseif ($config) { [string]$config.mqtt.port } else { "1883" }
+    $username = if ($UsernameOverride) { $UsernameOverride } elseif ($config) { [string]$config.mqtt.username } else { "" }
+    $password = if ($PasswordOverride) { $PasswordOverride } elseif ($config) { [string]$config.mqtt.password } else { "" }
+    $productType = if ($ProductTypeOverride) { $ProductTypeOverride } elseif ($config) { [string]$config.mqtt.productType } else { "crawler" }
+    $deviceId = if ($DeviceIdOverride) { $DeviceIdOverride } elseif ($config) { [string]$config.mqtt.deviceId } else { "crawler_00000001" }
 
     [pscustomobject]@{
         HostName = $hostName
@@ -122,47 +96,4 @@ function New-RobotBasePayload {
 function ConvertTo-CompactJson {
     param([object]$Payload)
     $Payload | ConvertTo-Json -Compress -Depth 16
-}
-
-function Publish-MqttJson {
-    param(
-        [pscustomobject]$Context,
-        [string]$Topic,
-        [object]$Payload,
-        [int]$Qos = 1
-    )
-
-    $payloadFile = [System.IO.Path]::GetTempFileName()
-    try {
-        $json = if ($Payload -is [string]) { $Payload } else { ConvertTo-CompactJson $Payload }
-        [System.IO.File]::WriteAllText($payloadFile, $json, [System.Text.UTF8Encoding]::new($false))
-        $arguments = New-MqttClientArgs $Context
-        $arguments += @("-q", [string]$Qos, "-t", $Topic, "-f", $payloadFile)
-        & $Context.PubExe @arguments | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw "mosquitto_pub failed with exit code $LASTEXITCODE" }
-    } finally {
-        Remove-Item -LiteralPath $payloadFile -ErrorAction SilentlyContinue
-    }
-}
-
-function Get-JsonProperty {
-    param(
-        [object]$Object,
-        [string]$Name,
-        [object]$Default = $null
-    )
-
-    if ($null -eq $Object) { return $Default }
-    $property = $Object.PSObject.Properties[$Name]
-    if ($null -eq $property) { return $Default }
-    return $property.Value
-}
-
-function Format-JsonText {
-    param([string]$Json)
-    try {
-        return ($Json | ConvertFrom-Json -ErrorAction Stop | ConvertTo-Json -Depth 16)
-    } catch {
-        return $Json
-    }
 }

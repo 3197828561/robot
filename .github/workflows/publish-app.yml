@@ -3,7 +3,6 @@ name: Build and publish Android App
 on:
   push:
     branches:
-      - "feature/**"
       - develop
     tags:
       - "v*"
@@ -21,7 +20,7 @@ on:
       channel:
         description: Release channel
         type: choice
-        options: [debug, test, stable]
+        options: [debug, test]
         default: test
         required: true
 
@@ -49,6 +48,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Verify stable tag belongs to main
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          git fetch origin main:refs/remotes/origin/main --no-tags
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "Stable tags must point to a commit on main." }
 
       - uses: actions/setup-java@v5
         with:
@@ -80,6 +89,8 @@ jobs:
           "version_code=$versionCode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version_name=$versionName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "channel=$channel" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $apkPath = if ($channel -eq 'debug') { 'app/build/outputs/apk/debug/app-debug.apk' } else { 'app/build/outputs/apk/release/app-release.apk' }
+          "apk_path=$apkPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Test and build signed APK
         shell: pwsh
@@ -107,5 +118,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: solar-robot-${{ steps.release.outputs.channel }}-${{ steps.release.outputs.version_code }}
-          path: app/build/outputs/apk/release/app-release.apk
+          path: ${{ steps.release.outputs.apk_path }}
+          if-no-files-found: error
           retention-days: 14

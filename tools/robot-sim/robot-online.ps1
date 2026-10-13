@@ -1,6 +1,6 @@
 param(
     [string]$MosquittoDir = "",
-    [string]$LocalProperties = "local.properties",
+    [string]$DeviceConfig = "",
     [string]$HostNameOverride = "",
     [string]$PortOverride = "",
     [string]$UsernameOverride = "",
@@ -18,7 +18,7 @@ if ($IntervalMs -lt 300) { throw "IntervalMs must be at least 300." }
 if ($Count -lt 0) { throw "Count cannot be negative." }
 
 $context = New-RobotMqttContext -ScriptDirectory $PSScriptRoot `
-    -MosquittoDir $MosquittoDir -LocalProperties $LocalProperties `
+    -MosquittoDir $MosquittoDir -DeviceConfig $DeviceConfig `
     -HostNameOverride $HostNameOverride -PortOverride $PortOverride `
     -UsernameOverride $UsernameOverride -PasswordOverride $PasswordOverride `
     -ProductTypeOverride $ProductTypeOverride -DeviceIdOverride $DeviceIdOverride

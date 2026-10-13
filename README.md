@@ -47,16 +47,21 @@ git switch feature/app-update-channel
 Copy-Item local.properties.example local.properties
 ```
 
-至少填写 `sdk.dir` 和 `java.home`。仅运行单元测试、Lint 和 Debug 构建时，MQTT 密码可以
-留空；连接真实 Robot 时再通过受控交接材料填写，不能提交 `local.properties`。
+`local.properties` 是当前电脑的 App 本地配置：保留标准 `sdk.dir`，以及 API、App MQTT
+用户名/密码、设备类型和设备 ID；还可用 `app.login.email/password` 记录测试登录账号，
+但这两个键不会编译进 APK，登录时仍由用户输入。该文件已被 Git 忽略。JDK 使用 `JAVA_HOME`，ADB 和
+Emulator 从 Android SDK 派生，Mosquitto 使用 `MOSQUITTO_DIR`、PATH 或脚本参数，不再把
+这些开发工具的独立路径写入 `local.properties`。
 
 ```powershell
 .\tools\run-gradle.ps1 testDebugUnitTest lintDebug assembleDebug
 ```
 
-成功后 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。真实服务器地址、MQTT
-密码和工具路径只放在被 Git 忽略的 `local.properties`。不要把密码、Token、JKS 或
-Base64 提交到仓库。
+成功后 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。如果某个 API/MQTT 键
+未写入 `local.properties`，完整工作区会从同级
+`import-message/app/config/app-runtime.env` 补充；GitHub Actions 使用仓库 Secrets。
+不要把 `local.properties`、密码、Token、JKS 或 Base64 提交到仓库。测试登录账号的交接
+来源为同级 `import-message/tester/app-login.env`。
 
 ## 构建与验证
 
@@ -67,7 +72,9 @@ Base64 提交到仓库。
 这是交接时的最小复现命令。`assembleRelease` 还需要固定 JKS 和四个签名变量，发布到 Cloud
 还需要 App 发布 Token；这些材料不在 GitHub 中。
 
-Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进程。首次创建或验证签名库：
+Release 签名参数明文保存在工作区同级
+`import-message/app-signing/release-signing-secrets.env`，不再使用 Windows DPAPI，换电脑后可直接读取。
+首次创建或验证签名库：
 
 ```powershell
 .\tools\create-release-keystore.ps1
@@ -76,7 +83,7 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 ## App 更新渠道
 
 - `debug`：与 `test` 并存的控制门禁对照包；
-- `test`：feature 联调包；
+- `test`：多人开发合入 `develop` 后的共享联调包；
 - `stable`：完成实机联调后的稳定包。
 
 ```powershell
@@ -104,19 +111,21 @@ Release 签名密码由 Windows DPAPI 加密保存，构建时仅注入当前进
 - `MQTT_USERNAME`
 - `MQTT_PASSWORD`
 
-普通 `feature/*` 或 `develop` 的 App/Gradle 代码变更发布 `test`；标签构建发布 `stable`；
-`workflow_dispatch` 可选择 `debug`、`test` 或 `stable`。文档、history 和模拟器脚本变更不会
-自动发布。首次接手时先核对 Secrets 名称和签名证书 SHA-256，不要在日志中打印值。
+`feature/*` 推送和面向 `develop`/`main` 的 PR 由 `.github/workflows/android-ci.yml` 执行
+单元测试、Lint 和 Debug 构建，不上传 Cloud。相关代码合入 `develop` 后，
+`publish-app.yml` 自动发布共享 `test`；`v*` 标签发布 `stable`；手动发布仅允许 `debug` 或
+`test`，且稳定标签必须指向 `main` 已包含的提交。文档、history 和模拟器脚本变更不会触发构建。首次接手时先核对 Secrets 名称和
+签名证书 SHA-256，不要在日志中打印值。
 
 ## GitHub 无法提供的内容
 
-- 固定 Release JKS、签名密码和 DPAPI 文件；
+- 固定 Release JKS 和明文签名参数文件；
 - App/Robot MQTT 密码、测试账号密码和 App 发布 Token；
 - Android SDK、JDK、ADB、模拟器和 Mosquitto 的本机安装；
 - 已安装设备状态、服务器数据库和 Robot 实机证据。
 
-这些内容通过工作区同级 `import-message/` 私下交接，收到后应迁移到接收人自己的安全存储，
-并按需要轮换凭据。
+这些内容通过工作区同级 `import-message/` 一并交接；当前开发阶段使用明文配置文件，不要求在
+新 Windows 电脑重新生成本机加密文件。
 
 ## 协作边界
 

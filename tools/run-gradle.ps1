@@ -1,72 +1,100 @@
 param(
     [Parameter(Position = 0, ValueFromRemainingArguments = $true)]
-    [string[]]$GradleArgs,
-    [string]$LocalProperties = "local.properties"
+    [string[]]$GradleArgs
 )
 
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..")
-if ($LocalProperties -eq "local.properties") {
-    $LocalProperties = Join-Path $RepoRoot "local.properties"
-}
+$localPropertiesPath = Join-Path $RepoRoot "local.properties"
 
-function Read-LocalProperties {
-    param([string]$Path)
-    $props = @{}
-    if (!(Test-Path -LiteralPath $Path)) { return $props }
-    foreach ($rawLine in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
+function Read-KeyValueFile([string]$Path) {
+    $values = @{}
+    if (!(Test-Path -LiteralPath $Path)) { return $values }
+    foreach ($rawLine in Get-Content -LiteralPath $Path -Encoding UTF8) {
         $line = $rawLine.Trim()
-        if ($line.Length -eq 0 -or $line.StartsWith("#")) { continue }
-        $idx = $line.IndexOf("=")
-        if ($idx -le 0) { continue }
-        $key = $line.Substring(0, $idx).Trim()
-        $value = $line.Substring($idx + 1).Trim().Trim('"')
-        $props[$key] = $value
+        if (!$line -or $line.StartsWith("#")) { continue }
+        $index = $line.IndexOf("=")
+        if ($index -gt 0) {
+            $values[$line.Substring(0, $index).Trim()] = $line.Substring($index + 1).Trim().Trim('"')
+        }
     }
-    return $props
+    return $values
 }
 
-$props = Read-LocalProperties $LocalProperties
-$javaHome = $props["java.home"]
-if (!$javaHome) {
-    $javaHome = $env:JAVA_HOME
-}
-if (!$javaHome -or !(Test-Path -LiteralPath (Join-Path $javaHome "bin\java.exe"))) {
-    throw "JDK not found. Set java.home in local.properties to a JDK 21 directory."
+$localProperties = Read-KeyValueFile $localPropertiesPath
+
+function Resolve-JavaHome {
+    if ($env:JAVA_HOME -and (Test-Path -LiteralPath (Join-Path $env:JAVA_HOME "bin\java.exe"))) {
+        return $env:JAVA_HOME
+    }
+
+    $bundled = Get-ChildItem -LiteralPath (Join-Path $RepoRoot ".local-tools") -Directory -Filter "jdk-*" -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "bin\java.exe") } |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if ($bundled) { return $bundled.FullName }
+
+    $java = Get-Command java.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($java) { return Split-Path -Parent (Split-Path -Parent $java.Source) }
+
+    throw "JDK 21 not found. Configure the Windows JAVA_HOME environment variable."
 }
 
+$javaHome = Resolve-JavaHome
 $env:JAVA_HOME = $javaHome
+
+$localSdk = $localProperties["sdk.dir"]
+if ($localSdk) { $localSdk = $localSdk.Replace('\:', ':').Replace('\\', '\') }
+$androidHome = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { $localSdk }
+if (!$androidHome -or !(Test-Path -LiteralPath $androidHome)) {
+    throw "Android SDK not found. Set sdk.dir in local.properties or configure Windows ANDROID_HOME."
+}
+if (!$env:ANDROID_HOME) { $env:ANDROID_HOME = $androidHome }
+if (!$env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT = $androidHome }
+
 $gradleWrapper = Join-Path $RepoRoot "gradlew.bat"
 $signingDirectory = Join-Path $RepoRoot ".local-tools\signing"
 $keystorePath = Join-Path $signingDirectory "robot-release.jks"
-$secretsPath = Join-Path $signingDirectory "release-secrets.clixml"
-$distributionSecretsPath = Join-Path $RepoRoot ".local-tools\secrets\distribution-secrets.clixml"
+$handoffRoot = Join-Path $RepoRoot "..\import-message"
+$signingEnvPath = Join-Path $handoffRoot "app-signing\release-signing-secrets.env"
+$runtimeEnvPath = Join-Path $handoffRoot "app\config\app-runtime.env"
 $savedEnvironment = @{}
 
-function Convert-SecureToPlainText([Security.SecureString]$Value) {
-    $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Value)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer) }
+function Set-ProcessValue([string]$Name, [string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) { return }
+    if (!$savedEnvironment.ContainsKey($Name)) {
+        $savedEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, "Process")
+    }
+    [Environment]::SetEnvironmentVariable($Name, $Value, "Process")
 }
 
 try {
-    if ((Test-Path -LiteralPath $keystorePath) -and (Test-Path -LiteralPath $secretsPath)) {
-        $saved = Import-Clixml -LiteralPath $secretsPath
-        foreach ($name in "ANDROID_KEYSTORE_FILE", "ANDROID_KEYSTORE_PASSWORD", "ANDROID_KEY_ALIAS", "ANDROID_KEY_PASSWORD") {
-            $savedEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, "Process")
+    $signing = Read-KeyValueFile $signingEnvPath
+    if ((Test-Path -LiteralPath $keystorePath) -and $signing.Count -gt 0) {
+        Set-ProcessValue "ANDROID_KEYSTORE_FILE" $keystorePath
+        Set-ProcessValue "ANDROID_KEYSTORE_PASSWORD" $signing["ANDROID_KEYSTORE_PASSWORD"]
+        Set-ProcessValue "ANDROID_KEY_ALIAS" $signing["ANDROID_KEY_ALIAS"]
+        Set-ProcessValue "ANDROID_KEY_PASSWORD" $signing["ANDROID_KEY_PASSWORD"]
+    }
+
+    $runtime = Read-KeyValueFile $runtimeEnvPath
+    $runtimeToLocal = [ordered]@{
+        API_BASE_URL = "api.base.url"
+        MQTT_HOST = "mqtt.host"
+        MQTT_PORT = "mqtt.port"
+        MQTT_USERNAME = "mqtt.username"
+        MQTT_PASSWORD = "mqtt.password"
+        MQTT_PRODUCT_TYPE = "mqtt.product_type"
+        MQTT_DEFAULT_DEVICE_ID = "mqtt.default_device_id"
+    }
+    foreach ($name in $runtimeToLocal.Keys) {
+        if ([string]::IsNullOrWhiteSpace($localProperties[$runtimeToLocal[$name]])) {
+            Set-ProcessValue $name $runtime[$name]
         }
-        $env:ANDROID_KEYSTORE_FILE = $keystorePath
-        $env:ANDROID_KEYSTORE_PASSWORD = Convert-SecureToPlainText $saved.StorePassword
-        $env:ANDROID_KEY_ALIAS = $saved.Alias
-        $env:ANDROID_KEY_PASSWORD = Convert-SecureToPlainText $saved.KeyPassword
     }
-    if (Test-Path -LiteralPath $distributionSecretsPath) {
-        $distribution = Import-Clixml -LiteralPath $distributionSecretsPath
-        $savedEnvironment["MQTT_PASSWORD"] = [Environment]::GetEnvironmentVariable("MQTT_PASSWORD", "Process")
-        $env:MQTT_PASSWORD = Convert-SecureToPlainText $distribution.MqttPassword
-    }
+
     & $gradleWrapper @GradleArgs
     $gradleExitCode = $LASTEXITCODE
 } finally {

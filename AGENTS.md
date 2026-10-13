@@ -1,15 +1,10 @@
 # Local development environment
 
-- Local-only tool paths and credentials live in the ignored root `local.properties`.
-- Before searching the machine or downloading tools, read these keys without printing secrets:
-  - `java.home`
-  - `mqtt.client.dir`
-  - `adb.path`
-  - `emulator.path`
-  - `sdk.dir`
-- Run Gradle through `tools/run-gradle.ps1`; it resolves `java.home` automatically.
-- Robot simulator scripts resolve Mosquitto from `mqtt.client.dir` automatically.
-- Never print or commit `mqtt.password`, `mqtt.robot.password`, or other values from `local.properties`.
+- Keep App-local SDK, API, and MQTT build configuration in the ignored `local.properties`; do not store JDK, ADB, Emulator, or Mosquitto paths there.
+- Resolve JDK from `JAVA_HOME`; Android SDK may use standard `sdk.dir` or `ANDROID_HOME`/`ANDROID_SDK_ROOT`.
+- Run Gradle through `tools/run-gradle.ps1`; it may use the ignored project-local JDK as a fallback.
+- Robot simulator scripts resolve Mosquitto from `MOSQUITTO_DIR`, PATH, or `-MosquittoDir`.
+- Transferable development and release values live in the sibling `import-message/` plaintext `.env`/JSON files; never print their values.
 - Project-local binaries belong under the ignored `.local-tools/` directory.
 
 ## Token-efficient builds and releases

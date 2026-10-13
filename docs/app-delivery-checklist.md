@@ -15,7 +15,7 @@
 | 源码基线 | 仓库、分支、完整提交哈希 |
 | APK | 文件名、渠道、`versionName`、`versionCode`、SHA-256 |
 | 构建结果 | 单元测试、Lint、Debug APK；发布时增加签名 Release APK |
-| 配置说明 | `local.properties.example` 中需要的键名，不包含真实值 |
+| 配置说明 | README 中的 `local.properties`、Windows 环境变量和 `.env` 键名，不包含真实值 |
 | 功能范围 | 本包已完成、未完成和暂不可用功能 |
 | 接口基线 | V3 未覆盖部分、V4.3、V5、V6 |
 | 回退点 | 可恢复的 Git 提交；已安装 App 回退使用更高 `versionCode` 重发 |
